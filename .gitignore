@@ -1,0 +1,28 @@
+# Environment files (never commit real secrets/credentials)
+.env
+.env.local
+*.env
+!*.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# SQLite databases (local dev/demo data, never source of truth)
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
