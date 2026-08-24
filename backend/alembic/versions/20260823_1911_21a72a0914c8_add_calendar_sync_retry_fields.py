@@ -22,10 +22,21 @@ def upgrade() -> None:
     # Phase 10: calendar sync needs a pending-operation marker, bounded-retry
     # bookkeeping, and a stable idempotency key so a retried create cannot
     # produce a duplicate external event.
+    #
+    # Unlike every other enum in this project, `calendaroperation` is added to
+    # an already-existing table (add_column) rather than declared inline in a
+    # create_table() call. SQLAlchemy only auto-emits CREATE TYPE as part of
+    # compiling a CREATE TABLE statement — a standalone add_column() does not,
+    # so on PostgreSQL the type must be created explicitly first. `.create()`
+    # is a no-op on SQLite (which has no native enum type), so this stays
+    # dialect-safe and doesn't affect the SQLite-backed test suite.
+    calendar_operation_enum = sa.Enum('NONE', 'CREATE', 'UPDATE', 'DELETE', name='calendaroperation')
+    calendar_operation_enum.create(op.get_bind(), checkfirst=True)
+
     with op.batch_alter_table('calendar_events') as batch_op:
         batch_op.add_column(sa.Column(
             'pending_operation',
-            sa.Enum('NONE', 'CREATE', 'UPDATE', 'DELETE', name='calendaroperation'),
+            calendar_operation_enum,
             nullable=False,
             server_default='CREATE',
         ))
@@ -59,3 +70,5 @@ def downgrade() -> None:
         batch_op.drop_column('attempts')
         batch_op.drop_column('idempotency_key')
         batch_op.drop_column('pending_operation')
+
+    sa.Enum(name='calendaroperation').drop(op.get_bind(), checkfirst=True)
