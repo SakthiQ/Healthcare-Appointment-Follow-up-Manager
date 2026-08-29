@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Layout from './components/Layout';
 import ProtectedRoute from './auth/ProtectedRoute';
 import { useAuth, homePathForRole } from './auth/AuthContext';
@@ -30,117 +31,120 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      <Route element={<Layout />}>
-        <Route path="/" element={<RootRedirect />} />
+        <Route element={<Layout />}>
+          <Route path="/" element={<RootRedirect />} />
 
-        {/* --- Patient portal --- */}
-        <Route
-          path="/patient"
-          element={
-            <ProtectedRoute roles={['PATIENT']}>
-              <PatientDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/patient/doctors"
-          element={
-            <ProtectedRoute roles={['PATIENT']}>
-              <DoctorSearch />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/patient/doctors/:doctorId"
-          element={
-            <ProtectedRoute roles={['PATIENT']}>
-              <BookAppointment />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/patient/appointments"
-          element={
-            <ProtectedRoute roles={['PATIENT']}>
-              <PatientAppointments />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/patient/appointments/:appointmentId"
-          element={
-            <ProtectedRoute roles={['PATIENT']}>
-              <PatientAppointmentDetail />
-            </ProtectedRoute>
-          }
-        />
+          {/* --- Patient portal --- */}
+          <Route
+            path="/patient"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <PatientDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/doctors"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <DoctorSearch />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/doctors/:doctorId"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <BookAppointment />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/appointments"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <PatientAppointments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/appointments/:appointmentId"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <PatientAppointmentDetail />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* --- Doctor portal --- */}
-        <Route
-          path="/doctor"
-          element={
-            <ProtectedRoute roles={['DOCTOR']}>
-              <DoctorDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/doctor/appointments"
-          element={
-            <ProtectedRoute roles={['DOCTOR']}>
-              <DoctorAppointments />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/doctor/appointments/:appointmentId"
-          element={
-            <ProtectedRoute roles={['DOCTOR']}>
-              <DoctorAppointmentDetail />
-            </ProtectedRoute>
-          }
-        />
+          {/* --- Doctor portal --- */}
+          <Route
+            path="/doctor"
+            element={
+              <ProtectedRoute roles={['DOCTOR']}>
+                <DoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/appointments"
+            element={
+              <ProtectedRoute roles={['DOCTOR']}>
+                <DoctorAppointments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/appointments/:appointmentId"
+            element={
+              <ProtectedRoute roles={['DOCTOR']}>
+                <DoctorAppointmentDetail />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* --- Admin portal --- */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/doctors"
-          element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <DoctorManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/doctors/:doctorId"
-          element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <DoctorConfig />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/conflicts"
-          element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <ConflictedAppointments />
-            </ProtectedRoute>
-          }
-        />
+          {/* --- Admin portal --- */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/doctors"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <DoctorManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/doctors/:doctorId"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <DoctorConfig />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/conflicts"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <ConflictedAppointments />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="*" element={<RootRedirect />} />
-      </Route>
-    </Routes>
+          <Route path="*" element={<RootRedirect />} />
+        </Route>
+      </Routes>
+      <Analytics />
+    </>
   );
 }
