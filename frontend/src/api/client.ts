@@ -112,7 +112,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         ? ((body as Record<string, unknown>).error_code as string)
         : null;
     // An expired/invalid token should not leave the app in a half-authed state.
-    if (response.status === 401 && token) {
+    // Only act if this request's token is still the current one — a stale
+    // request finishing after a fresh login must not end the new session.
+    if (response.status === 401 && token && getToken() === token) {
       clearToken();
       unauthorizedHandler?.();
     }

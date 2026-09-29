@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../../api/client';
 import type { AISummary, Appointment, Hold, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
+import { useNow } from '../../lib/useNow';
 import {
   bookableSlots,
   DAY_NAMES,
@@ -52,20 +53,23 @@ export default function BookAppointment() {
 
   const doctor = doctorQuery.data;
   const slots: SlotItem[] = slotsQuery.data?.slots ?? [];
-  const available = useMemo(() => bookableSlots(slots), [slots]);
+  const now = useNow();
+  const available = useMemo(() => bookableSlots(slots, now), [slots, now]);
 
   // Leaving the page with an unconfirmed hold releases it, so the slot isn't
   // blocked for everyone until the hold times out.
   const activeHoldId = useRef<string | null>(null);
+  const mounted = useRef(true);
   useEffect(() => {
     activeHoldId.current = hold?.id ?? null;
   }, [hold]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       if (activeHoldId.current) void api.releaseHold(activeHoldId.current).catch(() => undefined);
-    },
-    [],
-  );
+    };
+  }, []);
 
   // Live countdown on the hold — an expired hold cannot be confirmed, and the
   // backend is the authority on that, so we surface the deadline clearly.
@@ -88,6 +92,11 @@ export default function BookAppointment() {
         start_time: slot.start_time,
         end_time: slot.end_time,
       });
+      if (!mounted.current) {
+        // The patient left while the hold was being created — give it back.
+        void api.releaseHold(created.id).catch(() => undefined);
+        return;
+      }
       setHold(created);
       setStep('symptoms');
     } catch (err) {

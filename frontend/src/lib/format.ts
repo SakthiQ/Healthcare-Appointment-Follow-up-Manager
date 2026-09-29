@@ -67,9 +67,11 @@ export function todayInputValue(): string {
   return toDateInputValue(new Date());
 }
 
-/** Slots the patient can actually pick: free and not already started. */
-export function bookableSlots<T extends { is_available: boolean; start_time: string }>(slots: T[]): T[] {
-  const now = Date.now();
+/** Slots the patient can actually pick: free and not already started as of `now` (ms). */
+export function bookableSlots<T extends { is_available: boolean; start_time: string }>(
+  slots: T[],
+  now: number,
+): T[] {
   return slots.filter((s) => s.is_available && parseServerDate(s.start_time).getTime() > now);
 }
 

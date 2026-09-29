@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, nullIfNotFound } from '../../api/client';
 import type { PostVisitPayload, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
+import { useNow } from '../../lib/useNow';
 import { bookableSlots, formatDateTime, formatTime, todayInputValue, urgencyTone } from '../../lib/format';
 import {
   Badge,
@@ -45,6 +46,8 @@ export default function PatientAppointmentDetail() {
   const [symptomError, setSymptomError] = useState<string | undefined>();
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<unknown>(null);
+
+  const now = useNow();
 
   const appt = apptQuery.data;
   const doctorProfileId = appt?.doctor_profile_id ?? '';
@@ -130,7 +133,7 @@ export default function PatientAppointmentDetail() {
   const postVisitPayload =
     postVisit?.status === 'SUCCESS' ? (postVisit.payload as PostVisitPayload) : null;
 
-  const availableSlots = bookableSlots(slotsQuery.data?.slots ?? []);
+  const availableSlots = bookableSlots(slotsQuery.data?.slots ?? [], now);
 
   return (
     <div className="page">
