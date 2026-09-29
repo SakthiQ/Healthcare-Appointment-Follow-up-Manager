@@ -5,6 +5,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.exceptions import NotFoundError, ForbiddenError, ValidationError, ConflictError
 from models.user import User, UserRole
+from models.appointment import AppointmentStatus
 from models.clinical import AISummaryType, AISummaryStatus
 from repositories.appointment_repository import appointment_repository
 from repositories.clinical_repository import clinical_repository
@@ -20,6 +21,14 @@ from schemas.ai import (
 )
 
 logger = logging.getLogger(__name__)
+
+# A consultation (and the medication reminders it schedules) only makes sense
+# for an appointment that is actually going ahead or has taken place.
+CONSULTABLE_STATUSES = {
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.RESCHEDULED,
+    AppointmentStatus.COMPLETED,
+}
 
 
 def _authorize_appointment_participant(appointment, user: User) -> None:
@@ -106,6 +115,10 @@ class AIService:
             raise NotFoundError("Appointment not found.")
         if appointment.doctor_id != doctor.id:
             raise ForbiddenError("Not authorized to submit a consultation for this appointment.")
+        if appointment.status not in CONSULTABLE_STATUSES:
+            raise ConflictError(
+                f"Cannot record a consultation for a {appointment.status.value.lower()} appointment."
+            )
 
         existing = clinical_repository.get_consultation(db, appointment_id)
         if existing:

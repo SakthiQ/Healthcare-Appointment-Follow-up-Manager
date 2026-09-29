@@ -17,8 +17,11 @@ export default function DoctorDashboard() {
     .filter((a) => ACTIVE.has(a.status) && parseServerDate(a.start_time) >= now)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
+  // Today's count includes appointments that have already started or finished today.
   const todayKey = formatDate(now.toISOString());
-  const todays = upcoming.filter((a) => formatDate(a.start_time) === todayKey);
+  const todays = appointments.filter(
+    (a) => ACTIVE.has(a.status) && formatDate(a.start_time) === todayKey,
+  );
 
   return (
     <div className="page">
@@ -59,7 +62,9 @@ export default function DoctorDashboard() {
                 <li key={appt.id} className="list-row">
                   <div>
                     <strong>{formatDateTime(appt.start_time)}</strong>
-                    <div className="muted small">Ends {formatDateTime(appt.end_time)}</div>
+                    <div className="muted small">
+                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time)}
+                    </div>
                   </div>
                   <div className="list-row-end">
                     <StatusBadge status={appt.status} />
