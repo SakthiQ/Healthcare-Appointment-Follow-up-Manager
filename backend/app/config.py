@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
@@ -70,6 +70,19 @@ class Settings(BaseSettings):
     # (the deployed frontend's origin(s) in production). Defaults cover local
     # Vite dev only — set explicitly for any hosted deployment.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    # Optional regex for origins that can't be listed up front, such as Vercel
+    # preview deployments (a new URL per branch). Empty disables it.
+    CORS_ALLOWED_ORIGIN_REGEX: Optional[str] = None
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        # Several hosts (Render, Heroku) hand out "postgres://" URLs, a scheme
+        # SQLAlchemy 2.x no longer accepts.
+        if value.startswith("postgres://"):
+            return "postgresql://" + value[len("postgres://"):]
+        return value
 
     @property
     def cors_allowed_origins_list(self) -> list:
