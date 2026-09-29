@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../../api/client';
 import type { AISummary, Appointment, Hold, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import {
+  bookableSlots,
   DAY_NAMES,
   formatCountdown,
   formatDateTime,
@@ -51,7 +52,20 @@ export default function BookAppointment() {
 
   const doctor = doctorQuery.data;
   const slots: SlotItem[] = slotsQuery.data?.slots ?? [];
-  const available = useMemo(() => slots.filter((s) => s.is_available), [slots]);
+  const available = useMemo(() => bookableSlots(slots), [slots]);
+
+  // Leaving the page with an unconfirmed hold releases it, so the slot isn't
+  // blocked for everyone until the hold times out.
+  const activeHoldId = useRef<string | null>(null);
+  useEffect(() => {
+    activeHoldId.current = hold?.id ?? null;
+  }, [hold]);
+  useEffect(
+    () => () => {
+      if (activeHoldId.current) void api.releaseHold(activeHoldId.current).catch(() => undefined);
+    },
+    [],
+  );
 
   // Live countdown on the hold — an expired hold cannot be confirmed, and the
   // backend is the authority on that, so we surface the deadline clearly.
@@ -66,6 +80,7 @@ export default function BookAppointment() {
 
   async function handleSelectSlot(slot: SlotItem) {
     setHoldError(null);
+    setConfirmError(null);
     setHolding(true);
     try {
       const created = await api.createHold({
@@ -111,6 +126,7 @@ export default function BookAppointment() {
       // appointment id, so the appointment is created first and the symptoms
       // captured above are submitted immediately afterwards.
       const created = await api.createAppointment({ doctor_id: doctorId, hold_id: hold.id });
+      activeHoldId.current = null; // consumed by the booking — nothing to release
       setAppointment(created);
 
       try {
@@ -259,6 +275,7 @@ export default function BookAppointment() {
           </Card>
 
           <Card title="Available slots">
+            <ErrorBanner error={confirmError} />
             <ErrorBanner error={holdError} />
 
             <Field label="Date" htmlFor="date">
@@ -279,7 +296,7 @@ export default function BookAppointment() {
                 <EmptyState>
                   No slots available on this date
                   {slotsQuery.data && slotsQuery.data.total_slots > 0
-                    ? ' — every slot is booked, held, or the doctor is on leave.'
+                    ? ' — every remaining slot is booked, held, already past, or the doctor is on leave.'
                     : ' — the doctor is not working this day.'}{' '}
                   Try another date.
                 </EmptyState>

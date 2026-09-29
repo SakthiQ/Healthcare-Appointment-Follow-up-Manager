@@ -55,13 +55,22 @@ export function formatDate(iso: string): string {
   return parseServerDate(iso).toLocaleString('en-GB', DATE_ONLY);
 }
 
-/** YYYY-MM-DD for <input type="date"> and the slots endpoint. */
+/** YYYY-MM-DD in the viewer's own calendar, for <input type="date"> and the slots endpoint. */
 export function toDateInputValue(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function todayInputValue(): string {
   return toDateInputValue(new Date());
+}
+
+/** Slots the patient can actually pick: free and not already started. */
+export function bookableSlots<T extends { is_available: boolean; start_time: string }>(slots: T[]): T[] {
+  const now = Date.now();
+  return slots.filter((s) => s.is_available && parseServerDate(s.start_time).getTime() > now);
 }
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

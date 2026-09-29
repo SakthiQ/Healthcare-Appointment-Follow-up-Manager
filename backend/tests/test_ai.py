@@ -305,3 +305,29 @@ def test_duplicate_consultation_submission_rejected(client):
     assert r1.status_code == 201
     r2 = client.post(f"/api/v1/appointments/{appt['id']}/consultation", json=payload, headers=doc_headers)
     assert r2.status_code == 409
+
+
+def test_consultation_rejected_for_cancelled_appointment(client):
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
+    r_cancel = client.post(f"/api/v1/appointments/{appt['id']}/cancel", json={}, headers=headers1)
+    assert r_cancel.status_code == 200
+
+    payload = {
+        "notes": "Should not be recorded.",
+        "medications": [{"name": "Amoxicillin", "dosage": "500mg", "frequency": "twice daily", "duration_days": 5}],
+    }
+    r = client.post(f"/api/v1/appointments/{appt['id']}/consultation", json=payload, headers=doc_headers)
+    assert r.status_code == 409
+    r_get = client.get(f"/api/v1/appointments/{appt['id']}/consultation", headers=doc_headers)
+    assert r_get.status_code == 404
+
+
+def test_appointment_response_includes_display_names(client):
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
+    assert appt["patient_name"] == "Patient One"
+    assert appt["doctor_name"] == "Dr. AI"
+    assert appt["doctor_specialization"] == "General Medicine"
+
+    listed = client.get("/api/v1/appointments", headers=doc_headers).json()
+    mine = next(a for a in listed if a["id"] == appt["id"])
+    assert mine["patient_name"] == "Patient One"

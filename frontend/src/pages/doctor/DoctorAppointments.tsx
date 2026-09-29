@@ -60,7 +60,9 @@ export default function DoctorAppointments() {
                 <li key={appt.id} className="list-row">
                   <div>
                     <strong>{formatDateTime(appt.start_time)}</strong>
-                    <div className="muted small">Ends {formatDateTime(appt.end_time)}</div>
+                    <div className="muted small">
+                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time)}
+                    </div>
                   </div>
                   <div className="list-row-end">
                     <StatusBadge status={appt.status} />

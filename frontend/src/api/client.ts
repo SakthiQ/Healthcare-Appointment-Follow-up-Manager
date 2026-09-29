@@ -30,6 +30,13 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+// Lets the auth layer drop the signed-in user when the backend rejects the
+// token, so an expired session sends the user back to login.
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+}
+
 /** Normalised API error — surfaces the backend's real message and error_code. */
 export class ApiError extends Error {
   status: number;
@@ -105,11 +112,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         ? ((body as Record<string, unknown>).error_code as string)
         : null;
     // An expired/invalid token should not leave the app in a half-authed state.
-    if (response.status === 401) clearToken();
+    if (response.status === 401 && token) {
+      clearToken();
+      unauthorizedHandler?.();
+    }
     throw new ApiError(extractMessage(body, response.status), response.status, errorCode);
   }
 
   return body as T;
+}
+
+/**
+ * For "fetch it if it exists" reads: a 404 means there is nothing yet and
+ * resolves to null; every other failure (network, auth, server) still throws.
+ */
+export function nullIfNotFound<T>(promise: Promise<T>): Promise<T | null> {
+  return promise.catch((err) => {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  });
 }
 
 const get = <T>(path: string) => request<T>(path);

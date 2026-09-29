@@ -56,7 +56,9 @@ export default function PatientDashboard() {
                 <li key={appt.id} className="list-row">
                   <div>
                     <strong>{formatDateTime(appt.start_time)}</strong>
-                    <div className="muted small">Ends {formatDateTime(appt.end_time)}</div>
+                    <div className="muted small">
+                      {appt.doctor_name ?? 'Unknown doctor'} · Ends {formatDateTime(appt.end_time)}
+                    </div>
                   </div>
                   <div className="list-row-end">
                     <StatusBadge status={appt.status} />
@@ -78,7 +80,9 @@ export default function PatientDashboard() {
               <li key={appt.id} className="list-row">
                 <div>
                   <strong>{formatDateTime(appt.start_time)}</strong>
-                  <div className="muted small">Doctor unavailable — please choose a new slot.</div>
+                  <div className="muted small">
+                    {appt.doctor_name ?? 'Your doctor'} is unavailable — please choose a new slot.
+                  </div>
                 </div>
                 <div className="list-row-end">
                   <StatusBadge status={appt.status} />

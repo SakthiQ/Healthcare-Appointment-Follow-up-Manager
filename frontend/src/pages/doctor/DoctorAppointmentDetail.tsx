@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../../api/client';
+import { api, nullIfNotFound } from '../../api/client';
 import type { MedicationItem, PostVisitPayload, PreVisitPayload } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime, urgencyTone } from '../../lib/format';
@@ -16,6 +16,10 @@ import {
   SuccessBanner,
 } from '../../components/ui';
 
+// Mirrors the backend: consultations are only accepted for appointments that
+// are going ahead or have taken place.
+const CONSULTABLE = new Set(['CONFIRMED', 'RESCHEDULED', 'COMPLETED']);
+
 const EMPTY_MED: MedicationItem = { name: '', dosage: '', frequency: '', duration_days: null };
 
 export default function DoctorAppointmentDetail() {
@@ -23,15 +27,15 @@ export default function DoctorAppointmentDetail() {
 
   const apptQuery = useAsync(() => api.getAppointment(appointmentId), [appointmentId]);
   const preVisitQuery = useAsync(
-    () => api.getPreVisitSummary(appointmentId).catch(() => null),
+    () => nullIfNotFound(api.getPreVisitSummary(appointmentId)),
     [appointmentId],
   );
   const consultationQuery = useAsync(
-    () => api.getConsultation(appointmentId).catch(() => null),
+    () => nullIfNotFound(api.getConsultation(appointmentId)),
     [appointmentId],
   );
   const postVisitQuery = useAsync(
-    () => api.getPostVisitSummary(appointmentId).catch(() => null),
+    () => nullIfNotFound(api.getPostVisitSummary(appointmentId)),
     [appointmentId],
   );
 
@@ -110,7 +114,7 @@ export default function DoctorAppointmentDetail() {
     }
   }
 
-  if (apptQuery.loading) return <Spinner label="Loading appointment…" />;
+  if (apptQuery.loading && !apptQuery.data) return <Spinner label="Loading appointment…" />;
   if (apptQuery.error)
     return (
       <div className="page">
@@ -146,6 +150,10 @@ export default function DoctorAppointmentDetail() {
 
       <Card title="Appointment">
         <div className="summary-row">
+          <span>Patient</span>
+          <strong>{appt.patient_name ?? 'Unknown patient'}</strong>
+        </div>
+        <div className="summary-row">
           <span>Status</span>
           <StatusBadge status={appt.status} />
         </div>
@@ -161,6 +169,7 @@ export default function DoctorAppointmentDetail() {
 
       <Card title="Pre-visit AI summary">
         {preVisitQuery.loading ? <Spinner /> : null}
+        <ErrorBanner error={preVisitQuery.error} onRetry={preVisitQuery.reload} />
         {!preVisitQuery.loading && preVisitPayload ? (
           <>
             <div className="summary-row">
@@ -182,7 +191,7 @@ export default function DoctorAppointmentDetail() {
             </p>
           </>
         ) : null}
-        {!preVisitQuery.loading && !preVisitPayload ? (
+        {!preVisitQuery.loading && !preVisitQuery.error && !preVisitPayload ? (
           <EmptyState>
             {preVisit?.status === 'FAILED'
               ? `The summary could not be generated${preVisit.error_message ? `: ${preVisit.error_message}` : '.'}`
@@ -224,9 +233,16 @@ export default function DoctorAppointmentDetail() {
             </>
           ) : null}
         </Card>
+      ) : !CONSULTABLE.has(appt.status) ? (
+        <Card title="Record consultation">
+          <InfoBanner>
+            This appointment is {appt.status.toLowerCase()}, so a consultation can't be recorded for it.
+          </InfoBanner>
+        </Card>
       ) : (
         <Card title="Record consultation">
           {consultationQuery.loading ? <Spinner /> : null}
+          <ErrorBanner error={consultationQuery.error} onRetry={consultationQuery.reload} />
           <ErrorBanner error={submitError} />
 
           <Field label="Consultation notes" htmlFor="notes" error={fieldErrors.notes}>
@@ -359,6 +375,7 @@ export default function DoctorAppointmentDetail() {
         }
       >
         <ErrorBanner error={generateError} />
+        <ErrorBanner error={postVisitQuery.error} onRetry={postVisitQuery.reload} />
         {postVisitQuery.loading || generating ? <Spinner /> : null}
 
         {!consultation ? (
@@ -377,7 +394,7 @@ export default function DoctorAppointmentDetail() {
           </>
         ) : null}
 
-        {consultation && !postVisitQuery.loading && !generating && !postVisitPayload ? (
+        {consultation && !postVisitQuery.loading && !postVisitQuery.error && !generating && !postVisitPayload ? (
           <EmptyState>
             {postVisit?.status === 'FAILED'
               ? `The last attempt failed${postVisit.error_message ? `: ${postVisit.error_message}` : '.'} You can try again.`

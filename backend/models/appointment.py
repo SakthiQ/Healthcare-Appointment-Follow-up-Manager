@@ -58,6 +58,20 @@ class Appointment(Base):
     notification_jobs = relationship("NotificationJob", back_populates="appointment", cascade="all, delete-orphan")
     calendar_events = relationship("CalendarEvent", back_populates="appointment", cascade="all, delete-orphan")
 
+    # Display names for API responses, so portals can show who an
+    # appointment is with instead of bare ids.
+    @property
+    def patient_name(self):
+        return self.patient.full_name if self.patient else None
+
+    @property
+    def doctor_name(self):
+        return self.doctor_user.full_name if self.doctor_user else None
+
+    @property
+    def doctor_specialization(self):
+        return self.doctor.specialization if self.doctor else None
+
     def __repr__(self):
         return f"<Appointment id={self.id} status={self.status} start={self.start_time}>"
 
