@@ -1,0 +1,41 @@
+# Render Blueprint for the backend API (https://render.com/docs/blueprint-spec).
+# In Render: New > Blueprint > pick this repo. Render reads this file, creates the
+# service, and prompts for every `sync: false` value (never committed here).
+# The database is external (e.g. Neon) — paste its connection string as DATABASE_URL.
+# Full walkthrough: docs/deployment.md
+services:
+  - type: web
+    name: healthcare-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Migrations run on every boot; they are idempotent, and a fresh database gets
+    # every table, index and constraint on the first deploy.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
+      # Mock AI/email/calendar providers: the whole app works with no external
+      # credentials. See docs/deployment.md sections 4-6 before setting False.
+      - key: DEMO_MODE
+        value: "True"
+      - key: DATABASE_URL
+        sync: false
+      # Render generates a strong random JWT signing key once and keeps it.
+      - key: SECRET_KEY
+        generateValue: true
+      # The Vercel production URL, e.g. https://your-app.vercel.app (no trailing slash).
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Optional: also allow Vercel preview deployments, e.g.
+      # ^https://your-project-[a-z0-9-]+\.vercel\.app$
+      - key: CORS_ALLOWED_ORIGIN_REGEX
+        sync: false
+      - key: ALLOW_PRIVILEGED_SELF_REGISTRATION
+        value: "False"

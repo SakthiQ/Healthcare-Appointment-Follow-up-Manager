@@ -1,70 +1,86 @@
 # Deployment
 
-## Status: not deployed
+The repo ships ready-made config for one concrete stack — **Neon** (Postgres) →
+**Render** (backend) → **Vercel** (frontend) — all of which have free tiers. Any
+managed Postgres, any Python host, and any static host work too; the files below just
+remove the guesswork for this combination.
 
-No hosting-provider account, API token, or credential exists in this environment, and
-creating one (Render/Railway/Vercel account, payment method if required, DNS) is a
-decision for a human, not something an autonomous session should do unattended. This
-document is the concrete, step-by-step path to a hosted URL — nothing below requires a
-code change, since both halves were already built to be deployed as-is.
+| File | Purpose |
+|---|---|
+| `render.yaml` | Render Blueprint: backend web service, build/start commands, health check, env vars |
+| `frontend/vercel.json` | Vite build settings + SPA rewrite so refreshing `/patient/...` doesn't 404 |
+| `backend/scripts/create_admin.py` | Creates the first admin account directly in the database |
+
+> **Why the Vercel site says "Not found." today:** Vercel only hosts the static
+> frontend. Until `VITE_API_BASE_URL` points at a deployed backend, every API call goes
+> to the Vercel domain itself (`/api/v1/...`), which has no such route and returns 404.
 
 ## Order of operations
 
-Database → Backend → Frontend → (optionally) real LLM/Email/Google credentials. Each
-step below only needs the output of the one before it — nothing is circular except that
-the backend's `CORS_ALLOWED_ORIGINS` needs the frontend's URL, which doesn't exist until
-after the backend is already deployed once; that's why the backend is deployed *before*
-the frontend, then redeployed once with the real CORS value.
+Database → Backend → Frontend → set CORS → create admin. The backend's
+`CORS_ALLOWED_ORIGINS` needs the frontend URL; if the Vercel project already exists you
+know that URL up front and can set it in step 2 directly.
 
-## 1. Database (any managed PostgreSQL)
+## 1. Database — Neon
 
-Render, Railway, Supabase, Neon, or AWS RDS all work — nothing in this codebase is
-provider-specific, it's plain SQLAlchemy/Alembic against a `postgresql://` URL.
+1. In the Neon console, create a project (pick the region closest to your Render region).
+2. On the project dashboard, copy the connection string. It looks like
+   `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`.
+   Keep `?sslmode=require` — Neon requires TLS. (`postgres://` URLs from other hosts are
+   also fine; the backend rewrites them to `postgresql://`.)
+3. No manual schema step: the backend runs `alembic upgrade head` on every boot, which
+   creates every table, index and constraint on the first deploy.
 
-1. Create a PostgreSQL instance (Render/Railway: one click "New PostgreSQL"; note the
-   region — put it in the same region as the backend to avoid cross-region latency).
-2. Copy the connection string. It usually looks like
-   `postgresql://user:password@host:5432/dbname`. Some providers hand you a
-   `postgres://` URL — SQLAlchemy accepts either.
-3. That's it — no manual schema creation. The backend's start command (`alembic upgrade
-   head`, below) creates every table, index, and constraint from the 4 migrations in
-   `backend/alembic/versions/` the first time it boots against this URL.
+## 2. Backend — Render
 
-## 2. Backend (Render, Railway, or any host that runs a Python web process)
+1. In Render: **New → Blueprint**, connect this GitHub repo, and pick the branch to
+   deploy (usually `main`). Render reads `render.yaml` and proposes a web service
+   `healthcare-api` (free plan, root `backend/`).
+2. Render prompts for the values that are never committed:
+   - `DATABASE_URL` → the Neon connection string from step 1
+   - `CORS_ALLOWED_ORIGINS` → your Vercel production URL, e.g.
+     `https://your-app.vercel.app` (scheme included, no trailing slash; comma-separate
+     several). Put `http://localhost:5173` for now if you don't know it yet.
+   - `CORS_ALLOWED_ORIGIN_REGEX` → optional; to also allow Vercel preview deployments use
+     `^https://your-project-[a-z0-9-]+\.vercel\.app$` (replace `your-project` with your
+     Vercel project name). Leave empty otherwise.
 
-1. Create a web service from this repo, root directory `backend/`.
-   - Build command: `pip install -r requirements.txt`
-   - Start command: `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-     (most platforms inject `$PORT`; hardcode e.g. `--port 10000` if the platform doesn't)
-2. Set environment variables (see `backend/.env.example` for the full list; **do not**
-   copy `backend/.env` — it's a local dev file, excluded from git):
-   - `DATABASE_URL` → the managed Postgres connection string from step 1
-   - `SECRET_KEY` → a freshly generated random value (**not** the dev default)
-   - `DEMO_MODE=True` to launch without any AI/email/calendar credentials (recommended
-     for an evaluator-facing deployment — see `README.md#demo_mode`), or `False` plus
-     `AI_PROVIDER_*`/`SMTP_*`/`GOOGLE_*` for real integrations (steps 4-6 below)
-   - `CORS_ALLOWED_ORIGINS` → placeholder for now (e.g. `http://localhost:5173`) — you'll
-     update this to the frontend's real URL and redeploy once section 3 gives you one
-   - `ALLOW_PRIVILEGED_SELF_REGISTRATION` → leave `False`/unset; flip to `True` only for
-     the single request needed to bootstrap the first admin (see README), then unset
-     and redeploy
-3. Deploy. Confirm `GET /health` returns `{"status": "ok", ...}`.
-4. Bootstrap the first admin account (README "Creating the first admin account"), then
-   redeploy with `ALLOW_PRIVILEGED_SELF_REGISTRATION` unset/`False`.
+   `SECRET_KEY` is generated by Render automatically; `DEMO_MODE=True`, `DEBUG=False`
+   and `ALLOW_PRIVILEGED_SELF_REGISTRATION=False` are preset.
+3. Apply. When the deploy finishes, open `https://<service>.onrender.com/health` — expect
+   `{"status": "ok", "database": "connected", "demo_mode": true, ...}`.
 
-## 3. Frontend (Vercel, Netlify, or any static host)
+Free Render services sleep after ~15 minutes idle; the first request after that takes
+up to a minute while it wakes. Upgrade the plan if that matters.
 
-1. Create a project from this repo, root directory `frontend/`.
-   - Build command: `npm run build`
-   - Output directory: `dist`
-2. Set `VITE_API_BASE_URL` to the backend's deployed origin from the previous section
-   (e.g. `https://your-backend.onrender.com`) — must include the scheme, no trailing slash.
-3. Deploy. Open the resulting URL, confirm `/login` renders and a login attempt reaches
-   the backend (check the Network tab for a request to `VITE_API_BASE_URL`).
-4. Go back to the backend service and update `CORS_ALLOWED_ORIGINS` to this frontend's
-   real URL (e.g. `https://your-app.vercel.app`), then redeploy the backend. Until this
-   step, login/register calls from the deployed frontend will fail as CORS errors in
-   the browser console even though the backend itself is healthy.
+## 3. Frontend — Vercel
+
+1. In the Vercel project settings → **General**, set **Root Directory** to `frontend`
+   (`frontend/vercel.json` then supplies the build command, output directory and SPA
+   rewrite).
+2. **Settings → Environment Variables**: add `VITE_API_BASE_URL` =
+   `https://<service>.onrender.com` (scheme included, no trailing slash) for Production
+   (and Preview, if you set the CORS regex above).
+3. Redeploy — Vite bakes `VITE_API_BASE_URL` in at build time, so an existing deployment
+   won't pick it up until it is rebuilt.
+4. If you used a placeholder in step 2.2, go back to Render, set `CORS_ALLOWED_ORIGINS`
+   to the real Vercel URL, and save (Render redeploys automatically). Until then,
+   register/login fail with a CORS error in the browser console.
+
+## Creating the first admin
+
+There is no API endpoint that creates an admin. Run the script once from your own
+machine against the Neon database:
+
+```bash
+cd backend
+pip install -r requirements.txt
+DATABASE_URL="<the Neon connection string>" python -m scripts.create_admin --email admin@yourclinic.com --name "Clinic Admin"
+```
+
+It prompts for the password (hidden input; or set `ADMIN_PASSWORD`). Then sign in on the
+Vercel site with that account and create doctors from the admin portal. Patients
+register themselves.
 
 ## 4. LLM API (AI provider) — optional, DEMO_MODE works without it
 
@@ -133,7 +149,7 @@ Once both halves are live:
 2. Open `{frontend}` → register a patient → confirm the request reaches the backend
    (not a CORS error — if `CORS_ALLOWED_ORIGINS` wasn't set to the frontend's real
    origin, this is where it would surface)
-3. Bootstrap an admin (see README), log in on all three portals, and run through the
+3. Create an admin (see "Creating the first admin" above), log in on all three portals, and run through the
    patient booking → doctor consultation → admin leave-conflict workflows described in
    `docs/requirement-mapping.md`
 4. With `DEMO_MODE=True`, every workflow above works with zero external credentials —
