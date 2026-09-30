@@ -5,7 +5,7 @@
 The AI subsystem generates two summaries during an appointment's lifecycle:
 
 - **Pre-visit summary** — generated from the patient's submitted symptoms, before the visit, so the doctor has an urgency level, chief complaint, and suggested questions ready.
-- **Post-visit summary** — generated from the doctor's consultation notes, after the visit, so the patient gets a plain-language summary, medication schedule, and follow-up steps.
+- **Post-visit summary** — generated from the doctor's consultation notes and prescription, after the visit, so the patient gets a plain-language summary, medication schedule, and follow-up steps.
 
 The AI is **advisory only**. It never creates, modifies, or cancels an appointment, and it never produces a diagnosis — it summarizes and triages tone/urgency from patient-reported text.
 
@@ -33,6 +33,12 @@ Taken verbatim from AGENT_SPEC.md's "LLM Usage Guidance" (`backend/providers/ai_
 
 **Post-visit:**
 > Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: `<notes>`
+>
+> Prescription:
+> `- <name> <dosage>, <frequency>, for <n> days` (one line per medication, or "No medications prescribed.")
+> `Instructions: <prescription instructions>`
+
+The prescription block is appended so the medication schedule is built from what the doctor actually prescribed rather than guessed from free-text notes; the system prompt tells the model to copy every medication exactly and never add, remove or change one.
 
 Each is paired with a system prompt instructing the model to return *only* a JSON object of the exact required shape, with no diagnosis and no text outside the JSON. `RealAIProvider` also sets `response_format: {"type": "json_object"}` on the request as a second layer of enforcement, on top of the Pydantic validation described below.
 

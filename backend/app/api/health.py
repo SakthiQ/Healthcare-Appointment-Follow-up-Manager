@@ -13,6 +13,10 @@ class HealthResponse(BaseModel):
     environment: str
     database: str
     demo_mode: bool
+    # Which provider each integration is actually using: "mock" or "real".
+    ai_provider: str
+    email_provider: str
+    calendar_provider: str
 
 
 @router.get("/health", response_model=HealthResponse, status_code=status.HTTP_200_OK)
@@ -24,5 +28,8 @@ def health_check(current_settings: Settings = Depends(get_settings)):
         version=current_settings.VERSION,
         environment=current_settings.ENVIRONMENT,
         database="connected" if db_connected else "disconnected",
-        demo_mode=current_settings.DEMO_MODE
+        demo_mode=current_settings.DEMO_MODE,
+        ai_provider="mock" if current_settings.ai_demo_mode else "real",
+        email_provider="mock" if current_settings.email_demo_mode else "real",
+        calendar_provider="mock" if current_settings.calendar_demo_mode else "real",
     )

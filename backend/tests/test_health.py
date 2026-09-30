@@ -8,6 +8,9 @@ def test_health_endpoint(client):
     assert "environment" in data
     assert "database" in data
     assert "demo_mode" in data
+    assert data["ai_provider"] in ("mock", "real")
+    assert data["email_provider"] in ("mock", "real")
+    assert data["calendar_provider"] in ("mock", "real")
 
 
 def test_health_endpoint_v1(client):

@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     
     DEMO_MODE: bool = True
+
+    # Per-integration overrides of DEMO_MODE. Unset (None) follows DEMO_MODE;
+    # set one to False to use the real provider for just that integration,
+    # e.g. a real LLM while email and calendar stay mocked.
+    AI_DEMO_MODE: Optional[bool] = None
+    EMAIL_DEMO_MODE: Optional[bool] = None
+    CALENDAR_DEMO_MODE: Optional[bool] = None
     
     DATABASE_URL: str = "sqlite:///./healthcare_dev.db"
     
@@ -70,6 +77,26 @@ class Settings(BaseSettings):
     # (the deployed frontend's origin(s) in production). Defaults cover local
     # Vite dev only — set explicitly for any hosted deployment.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @field_validator("AI_DEMO_MODE", "EMAIL_DEMO_MODE", "CALENDAR_DEMO_MODE", mode="before")
+    @classmethod
+    def _blank_override_means_unset(cls, value):
+        # An empty env var (e.g. AI_DEMO_MODE="") means "follow DEMO_MODE".
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @property
+    def ai_demo_mode(self) -> bool:
+        return self.DEMO_MODE if self.AI_DEMO_MODE is None else self.AI_DEMO_MODE
+
+    @property
+    def email_demo_mode(self) -> bool:
+        return self.DEMO_MODE if self.EMAIL_DEMO_MODE is None else self.EMAIL_DEMO_MODE
+
+    @property
+    def calendar_demo_mode(self) -> bool:
+        return self.DEMO_MODE if self.CALENDAR_DEMO_MODE is None else self.CALENDAR_DEMO_MODE
 
     @property
     def cors_allowed_origins_list(self) -> list:

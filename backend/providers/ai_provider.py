@@ -6,7 +6,8 @@ AGENT_SPEC.md so the documented contract and the implementation never drift
 apart. See docs/ai-design.md for the full write-up.
 """
 import abc
-from typing import Any, Dict
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence
 
 import httpx
 
@@ -24,6 +25,10 @@ POST_VISIT_PROMPT_TEMPLATE = (
     "medication schedule and follow-up steps: {notes}"
 )
 
+# Appended to the spec's post-visit prompt so the medication schedule is built
+# from what the doctor actually prescribed, not guessed from free-text notes.
+POST_VISIT_PRESCRIPTION_TEMPLATE = "\n\nPrescription:\n{prescription}"
+
 PRE_VISIT_SYSTEM_PROMPT = (
     "You are a clinical intake assistant. Given a patient's free-text "
     "symptom description, respond with ONLY a JSON object of the exact "
@@ -40,8 +45,36 @@ POST_VISIT_SYSTEM_PROMPT = (
     '{"summary": "string", "medication_schedule": "string", '
     '"follow_up_steps": "string"}. '
     "Write in plain, patient-friendly language. Do not include any text "
-    "outside the JSON object. Do not provide a new diagnosis."
+    "outside the JSON object. Do not provide a new diagnosis. Build the "
+    "medication schedule only from the Prescription section, keeping every "
+    "medication's name, dosage, frequency and duration exactly as given; "
+    "never add, remove or change a medication. If no medications are "
+    "prescribed, say so."
 )
+
+
+@dataclass(frozen=True)
+class PrescribedMedication:
+    name: str
+    dosage: str
+    frequency: str
+    duration_days: Optional[int] = None
+
+    def describe(self) -> str:
+        text = f"{self.name} {self.dosage}, {self.frequency}"
+        if self.duration_days:
+            text += f", for {self.duration_days} day{'s' if self.duration_days != 1 else ''}"
+        return text
+
+
+def format_prescription(
+    medications: Sequence[PrescribedMedication], instructions: Optional[str]
+) -> str:
+    """Plain-text prescription block given to the LLM."""
+    lines = [f"- {m.describe()}" for m in medications] or ["- No medications prescribed."]
+    if instructions and instructions.strip():
+        lines.append(f"Instructions: {instructions.strip()}")
+    return "\n".join(lines)
 
 
 class AIProviderError(Exception):
@@ -69,7 +102,12 @@ class AIProvider(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def generate_post_visit_summary(self, notes: str) -> Dict[str, Any]:
+    def generate_post_visit_summary(
+        self,
+        notes: str,
+        medications: Sequence[PrescribedMedication] = (),
+        prescription_instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
         ...
 
 
@@ -104,11 +142,22 @@ class MockAIProvider(AIProvider):
             ],
         }
 
-    def generate_post_visit_summary(self, notes: str) -> Dict[str, Any]:
+    def generate_post_visit_summary(
+        self,
+        notes: str,
+        medications: Sequence[PrescribedMedication] = (),
+        prescription_instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
         notes_text = (notes or "").strip() or "No additional notes provided."
+        if medications:
+            schedule = " ".join(f"{m.describe()}." for m in medications)
+        else:
+            schedule = "No medications were prescribed at this visit."
+        if prescription_instructions and prescription_instructions.strip():
+            schedule += f" {prescription_instructions.strip()}"
         return {
             "summary": f"Here is a summary of your visit: {notes_text}",
-            "medication_schedule": "Take medications as prescribed by your doctor. See your prescription for exact dosage and frequency.",
+            "medication_schedule": schedule,
             "follow_up_steps": "Follow up with your doctor if symptoms persist or worsen. Attend any scheduled follow-up appointment.",
         }
 
@@ -173,14 +222,22 @@ class RealAIProvider(AIProvider):
         prompt = PRE_VISIT_PROMPT_TEMPLATE.format(symptoms=symptoms)
         return self._chat_completion(PRE_VISIT_SYSTEM_PROMPT, prompt)
 
-    def generate_post_visit_summary(self, notes: str) -> Dict[str, Any]:
-        prompt = POST_VISIT_PROMPT_TEMPLATE.format(notes=notes)
+    def generate_post_visit_summary(
+        self,
+        notes: str,
+        medications: Sequence[PrescribedMedication] = (),
+        prescription_instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        prompt = POST_VISIT_PROMPT_TEMPLATE.format(notes=notes) + POST_VISIT_PRESCRIPTION_TEMPLATE.format(
+            prescription=format_prescription(medications, prescription_instructions)
+        )
         return self._chat_completion(POST_VISIT_SYSTEM_PROMPT, prompt)
 
 
 def get_ai_provider() -> AIProvider:
     """Resolve the active provider based on current settings (read live, not cached,
-    so DEMO_MODE toggles and test overrides take effect immediately)."""
-    if settings.DEMO_MODE:
+    so DEMO_MODE toggles and test overrides take effect immediately).
+    AI_DEMO_MODE, when set, overrides DEMO_MODE for this integration only."""
+    if settings.ai_demo_mode:
         return MockAIProvider()
     return RealAIProvider()

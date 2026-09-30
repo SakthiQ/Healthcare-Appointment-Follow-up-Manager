@@ -74,20 +74,25 @@ AI-related workflow. To wire up a real LLM:
 
 1. Get an API key from any OpenAI-compatible provider — OpenAI itself, or any
    OpenAI-API-compatible endpoint (Azure OpenAI, Groq, Together, OpenRouter, a local
-   vLLM/Ollama server with an OpenAI-compatible shim, etc.). `RealAIProvider`
+   vLLM/Ollama server with an OpenAI-compatible shim, Google Gemini, etc.). `RealAIProvider`
    (`backend/providers/ai_provider.py`) speaks the standard `/chat/completions` shape —
    no vendor SDK, so any of these work without a code change.
 2. Set on the backend service:
-   - `DEMO_MODE=False`
+   - `AI_DEMO_MODE=False` — switches only the AI to the real provider; email and
+     calendar keep following `DEMO_MODE`
    - `AI_PROVIDER_API_KEY` → the key
    - `AI_PROVIDER_BASE_URL` → the provider's API base (default `https://api.openai.com/v1`)
    - `AI_PROVIDER_MODEL` → a model name that provider serves (default `gpt-4o-mini`)
-3. Redeploy. Generate a pre-visit summary through the app and confirm it's no longer the
-   Mock provider's keyword-based output.
 
-> Setting `DEMO_MODE=False` also activates the real Email and Calendar providers below —
-> they aren't independently toggleable. Configure all three together, or stay on
-> `DEMO_MODE=True`.
+   For **Google Gemini**: `AI_PROVIDER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`
+   and `AI_PROVIDER_MODEL=gemini-2.5-flash`, with a Gemini API key from Google AI Studio.
+3. Redeploy. `GET /health` should report `"ai_provider": "real"`. Generate a pre-visit
+   summary through the app and confirm it's no longer the Mock provider's keyword-based
+   output.
+
+> Each integration has its own switch — `AI_DEMO_MODE`, `EMAIL_DEMO_MODE`,
+> `CALENDAR_DEMO_MODE`. Unset, each follows `DEMO_MODE`; `DEMO_MODE=False` alone turns
+> on all three real providers at once. `GET /health` reports which one each is using.
 
 ## 5. Email (SMTP) — optional, DEMO_MODE works without it
 
