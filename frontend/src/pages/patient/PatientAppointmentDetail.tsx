@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../../api/client';
+import { api, nullIfNotFound } from '../../api/client';
 import type { PostVisitPayload, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
-import { formatDateTime, formatTime, todayInputValue, urgencyTone } from '../../lib/format';
+import { useNow } from '../../lib/useNow';
+import { bookableSlots, formatDateTime, formatTime, todayInputValue, urgencyTone } from '../../lib/format';
 import {
   Badge,
   Card,
@@ -19,17 +20,18 @@ import {
 
 const RESCHEDULABLE = new Set(['CONFIRMED', 'RESCHEDULED', 'CONFLICTED']);
 const CANCELLABLE = new Set(['CONFIRMED', 'RESCHEDULED', 'CONFLICTED', 'HELD']);
+const SUMMARY_EDITABLE = new Set(['CONFIRMED', 'RESCHEDULED']);
 
 export default function PatientAppointmentDetail() {
   const { appointmentId = '' } = useParams();
 
   const apptQuery = useAsync(() => api.getAppointment(appointmentId), [appointmentId]);
   const preVisitQuery = useAsync(
-    () => api.getPreVisitSummary(appointmentId).catch(() => null),
+    () => nullIfNotFound(api.getPreVisitSummary(appointmentId)),
     [appointmentId],
   );
   const postVisitQuery = useAsync(
-    () => api.getPostVisitSummary(appointmentId).catch(() => null),
+    () => nullIfNotFound(api.getPostVisitSummary(appointmentId)),
     [appointmentId],
   );
 
@@ -39,6 +41,13 @@ export default function PatientAppointmentDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const [symptoms, setSymptoms] = useState('');
+  const [symptomError, setSymptomError] = useState<string | undefined>();
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<unknown>(null);
+
+  const now = useNow();
 
   const appt = apptQuery.data;
   const doctorProfileId = appt?.doctor_profile_id ?? '';
@@ -70,6 +79,25 @@ export default function PatientAppointmentDetail() {
     }
   }
 
+  async function handleGeneratePreVisit() {
+    if (symptoms.trim().length < 3) {
+      setSymptomError('Please describe your symptoms (at least 3 characters).');
+      return;
+    }
+    setSymptomError(undefined);
+    setGenerateError(null);
+    setGenerating(true);
+    try {
+      await api.submitSymptomReport(appointmentId, symptoms.trim());
+      await api.generatePreVisitSummary(appointmentId);
+      preVisitQuery.reload();
+    } catch (err) {
+      setGenerateError(err);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function handleCancel() {
     setActionError(null);
     setBusy(true);
@@ -86,7 +114,8 @@ export default function PatientAppointmentDetail() {
     }
   }
 
-  if (apptQuery.loading) return <Spinner label="Loading appointment…" />;
+  // Only block the page on the first load; reloads after an action keep it on screen.
+  if (apptQuery.loading && !apptQuery.data) return <Spinner label="Loading appointment…" />;
   if (apptQuery.error)
     return (
       <div className="page">
@@ -104,7 +133,7 @@ export default function PatientAppointmentDetail() {
   const postVisitPayload =
     postVisit?.status === 'SUCCESS' ? (postVisit.payload as PostVisitPayload) : null;
 
-  const availableSlots = (slotsQuery.data?.slots ?? []).filter((s) => s.is_available);
+  const availableSlots = bookableSlots(slotsQuery.data?.slots ?? [], now);
 
   return (
     <div className="page">
@@ -131,6 +160,13 @@ export default function PatientAppointmentDetail() {
       ) : null}
 
       <Card title="Summary">
+        <div className="summary-row">
+          <span>Doctor</span>
+          <strong>
+            {appt.doctor_name ?? 'Unknown doctor'}
+            {appt.doctor_specialization ? ` · ${appt.doctor_specialization}` : ''}
+          </strong>
+        </div>
         <div className="summary-row">
           <span>Status</span>
           <StatusBadge status={appt.status} />
@@ -215,6 +251,7 @@ export default function PatientAppointmentDetail() {
 
       <Card title="Pre-visit summary">
         {preVisitQuery.loading ? <Spinner /> : null}
+        <ErrorBanner error={preVisitQuery.error} onRetry={preVisitQuery.reload} />
         {!preVisitQuery.loading && preVisitPayload ? (
           <>
             <div className="summary-row">
@@ -233,17 +270,45 @@ export default function PatientAppointmentDetail() {
             </ol>
           </>
         ) : null}
-        {!preVisitQuery.loading && !preVisitPayload ? (
+        {!preVisitQuery.loading && !preVisitQuery.error && !preVisitPayload ? (
           <EmptyState>
             {preVisit?.status === 'FAILED'
               ? `The summary could not be generated${preVisit.error_message ? `: ${preVisit.error_message}` : '.'}`
               : 'No pre-visit summary has been generated for this appointment.'}
           </EmptyState>
         ) : null}
+        {!preVisitQuery.loading && !preVisitQuery.error && !preVisitPayload && SUMMARY_EDITABLE.has(appt.status) ? (
+          <>
+            <ErrorBanner error={generateError} />
+            <Field
+              label="Symptoms"
+              htmlFor="symptoms"
+              error={symptomError}
+              hint="What's bothering you, when it started, and how it's changed."
+            >
+              <textarea
+                id="symptoms"
+                rows={5}
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                disabled={generating}
+              />
+            </Field>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleGeneratePreVisit}
+              disabled={generating}
+            >
+              {generating ? 'Generating summary…' : 'Generate pre-visit summary'}
+            </button>
+          </>
+        ) : null}
       </Card>
 
       <Card title="After your visit">
         {postVisitQuery.loading ? <Spinner /> : null}
+        <ErrorBanner error={postVisitQuery.error} onRetry={postVisitQuery.reload} />
         {!postVisitQuery.loading && postVisitPayload ? (
           <>
             <h3>Summary</h3>
@@ -254,7 +319,7 @@ export default function PatientAppointmentDetail() {
             <p>{postVisitPayload.follow_up_steps}</p>
           </>
         ) : null}
-        {!postVisitQuery.loading && !postVisitPayload ? (
+        {!postVisitQuery.loading && !postVisitQuery.error && !postVisitPayload ? (
           <EmptyState>
             Your doctor hasn't published a post-visit summary yet. It will appear here after your
             consultation.

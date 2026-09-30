@@ -146,16 +146,13 @@ one integration at a time with `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` or `CALENDAR_DE
 **`POST /auth/register` only ever creates a PATIENT account** unless
 `ALLOW_PRIVILEGED_SELF_REGISTRATION=True` (this was a real vulnerability found during
 the Phase 13 security audit — see [Known limitations](#known-limitations)). There is no
-API endpoint that creates the first admin. To bootstrap one:
+API endpoint that creates the first admin. Create one directly in the database with the
+bundled script (works against local SQLite or a hosted Postgres via `DATABASE_URL`):
 
 ```bash
 cd backend
-ALLOW_PRIVILEGED_SELF_REGISTRATION=True python -m uvicorn app.main:app
-# in another terminal, once:
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@yourclinic.com","password":"<strong password>","full_name":"Admin","role":"ADMIN"}'
-# then stop the server, remove the env var (or set it back to False), and restart.
+python -m scripts.create_admin --email admin@yourclinic.com --name "Clinic Admin"
+# prompts for the password (hidden); or set ADMIN_PASSWORD
 ```
 
 Once that admin exists, they create every doctor account via
@@ -237,15 +234,11 @@ used. Frontend: `cd frontend && npm run typecheck && npm run build`.
 
 ## Deployment
 
-**Not deployed.** This environment has no hosting-provider accounts or credentials, and
-creating one is outside what an autonomous coding session can do on its own — see
-`docs/deployment.md` for exactly what "done" looks like and the steps to get there
-(Render/Railway for the backend + a managed Postgres, Vercel/Netlify for the frontend).
-Both halves are deployment-ready today: the backend needs only `DATABASE_URL` +
-`SECRET_KEY` (+ optionally real `AI_PROVIDER_*`/`SMTP_*`/`GOOGLE_*` credentials) and runs
-`alembic upgrade head` then `uvicorn app.main:app`; the frontend is a static Vite build
-(`npm run build` → `dist/`) needing only `VITE_API_BASE_URL` pointed at the deployed
-backend. Neither requires code changes to deploy — see `docs/deployment.md`.
+Ready-made config for **Neon** (Postgres) → **Render** (backend, `render.yaml`) →
+**Vercel** (frontend, `frontend/vercel.json`). Step-by-step guide, including creating the
+first admin on the hosted database: [`docs/deployment.md`](docs/deployment.md). The
+frontend only works once `VITE_API_BASE_URL` points at a deployed backend — without it,
+every API call returns "Not found."
 
 ## Known limitations
 

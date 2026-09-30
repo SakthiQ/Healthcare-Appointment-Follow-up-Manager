@@ -36,7 +36,7 @@ export default function ConflictedAppointments() {
               <thead>
                 <tr>
                   <th>Original time</th>
-                  <th>Appointment</th>
+                  <th>Doctor</th>
                   <th>Patient</th>
                   <th>Status</th>
                 </tr>
@@ -45,8 +45,8 @@ export default function ConflictedAppointments() {
                 {conflicts.map((appt) => (
                   <tr key={appt.id}>
                     <td>{formatDateTime(appt.start_time)}</td>
-                    <td className="mono small">{appt.id}</td>
-                    <td className="mono small">{appt.patient_id}</td>
+                    <td>{appt.doctor_name ?? '—'}</td>
+                    <td>{appt.patient_name ?? <span className="mono small">{appt.patient_id}</span>}</td>
                     <td>
                       <StatusBadge status={appt.status} />
                     </td>

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api, clearToken, getToken, setToken } from '../api/client';
+import { api, clearToken, getToken, setToken, setUnauthorizedHandler } from '../api/client';
 import type { User, UserRole } from '../api/types';
 
 interface AuthState {
@@ -16,6 +16,13 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Any request rejected with 401 means the session is gone: drop the user so
+  // ProtectedRoute redirects to login instead of leaving a half-authed UI.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // Restore the session on load: the token lives in localStorage, but the
   // backend remains the authority on whether it is still valid.

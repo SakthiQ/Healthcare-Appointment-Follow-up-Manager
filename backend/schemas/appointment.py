@@ -33,3 +33,6 @@ class AppointmentResponse(BaseModel):
     status: AppointmentStatus
     created_at: datetime
     updated_at: datetime
+    patient_name: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_specialization: Optional[str] = None

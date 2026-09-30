@@ -100,6 +100,9 @@ export interface Appointment {
   status: AppointmentStatus;
   created_at: string;
   updated_at: string;
+  patient_name: string | null;
+  doctor_name: string | null;
+  doctor_specialization: string | null;
 }
 
 export interface PreVisitPayload {
