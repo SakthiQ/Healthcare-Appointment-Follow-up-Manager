@@ -9,7 +9,7 @@ from models.appointment import AppointmentStatus
 from models.clinical import AISummaryType, AISummaryStatus
 from repositories.appointment_repository import appointment_repository
 from repositories.clinical_repository import clinical_repository
-from providers.ai_provider import AIProvider, AIProviderError, get_ai_provider
+from providers.ai_provider import AIProvider, AIProviderError, PrescribedMedication, get_ai_provider
 from services.reminder_service import reminder_service
 from schemas.ai import (
     PreVisitAIOutput,
@@ -180,12 +180,25 @@ class AIService:
         if not consultation:
             raise ValidationError("Submit a consultation before generating a post-visit summary.")
 
+        prescription = consultation.prescription
+        medications = [
+            PrescribedMedication(
+                name=m.name, dosage=m.dosage, frequency=m.frequency, duration_days=m.duration_days
+            )
+            for m in (prescription.medications if prescription else [])
+        ]
+        instructions = prescription.instructions if prescription else None
+
         summary = self._run_generation(
             db=db,
             appointment_id=appointment_id,
             summary_type=AISummaryType.POST_VISIT,
             output_model=PostVisitAIOutput,
-            call=lambda provider: provider.generate_post_visit_summary(consultation.notes),
+            call=lambda provider: provider.generate_post_visit_summary(
+                consultation.notes,
+                medications=medications,
+                prescription_instructions=instructions,
+            ),
         )
         return AISummaryResponse.model_validate(summary)
 

@@ -78,7 +78,7 @@ class _FixedProvider(AIProvider):
     def generate_pre_visit_summary(self, symptoms: str) -> Dict[str, Any]:
         return self._pre
 
-    def generate_post_visit_summary(self, notes: str) -> Dict[str, Any]:
+    def generate_post_visit_summary(self, notes: str, **_: Any) -> Dict[str, Any]:
         return self._post
 
 
@@ -91,7 +91,7 @@ class _RaisingProvider(AIProvider):
     def generate_pre_visit_summary(self, symptoms: str) -> Dict[str, Any]:
         raise self._exc
 
-    def generate_post_visit_summary(self, notes: str) -> Dict[str, Any]:
+    def generate_post_visit_summary(self, notes: str, **_: Any) -> Dict[str, Any]:
         raise self._exc
 
 
@@ -305,6 +305,99 @@ def test_duplicate_consultation_submission_rejected(client):
     assert r1.status_code == 201
     r2 = client.post(f"/api/v1/appointments/{appt['id']}/consultation", json=payload, headers=doc_headers)
     assert r2.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Post-visit: the prescription reaches the AI, not just the free-text notes
+# ---------------------------------------------------------------------------
+
+_CONSULTATION_WITH_PRESCRIPTION = {
+    "notes": "Acute sinusitis. Rest and fluids.",
+    "prescription_instructions": "Take with food.",
+    "medications": [
+        {"name": "Amoxicillin", "dosage": "500mg", "frequency": "three times daily", "duration_days": 7},
+        {"name": "Paracetamol", "dosage": "1g", "frequency": "every 6 hours as needed", "duration_days": None},
+    ],
+}
+
+
+class _RecordingProvider(_FixedProvider):
+    def __init__(self):
+        super().__init__(post_visit_output={
+            "summary": "s", "medication_schedule": "m", "follow_up_steps": "f",
+        })
+        self.post_visit_calls = []
+
+    def generate_post_visit_summary(self, notes, medications=(), prescription_instructions=None):
+        self.post_visit_calls.append((notes, list(medications), prescription_instructions))
+        return self._post
+
+
+def test_post_visit_summary_receives_prescription(client):
+    appt, _, _, _, doc_headers = setup_ai_test_env(client)
+    r = client.post(f"/api/v1/appointments/{appt['id']}/consultation",
+                    json=_CONSULTATION_WITH_PRESCRIPTION, headers=doc_headers)
+    assert r.status_code == 201
+
+    provider = _RecordingProvider()
+    _override_ai_service(provider)
+    try:
+        r = client.post(f"/api/v1/appointments/{appt['id']}/ai/post-visit-summary", headers=doc_headers)
+    finally:
+        _restore_ai_service()
+    assert r.status_code == 200 and r.json()["status"] == AISummaryStatus.SUCCESS.value
+
+    notes, meds, instructions = provider.post_visit_calls[0]
+    assert notes == "Acute sinusitis. Rest and fluids."
+    assert instructions == "Take with food."
+    assert {(m.name, m.dosage, m.frequency, m.duration_days) for m in meds} == {
+        ("Amoxicillin", "500mg", "three times daily", 7),
+        ("Paracetamol", "1g", "every 6 hours as needed", None),
+    }
+
+
+def test_mock_post_visit_schedule_lists_prescribed_medications(client):
+    appt, _, _, _, doc_headers = setup_ai_test_env(client)
+    client.post(f"/api/v1/appointments/{appt['id']}/consultation",
+                json=_CONSULTATION_WITH_PRESCRIPTION, headers=doc_headers)
+    r = client.post(f"/api/v1/appointments/{appt['id']}/ai/post-visit-summary", headers=doc_headers)
+    schedule = r.json()["payload"]["medication_schedule"]
+    assert "Amoxicillin 500mg, three times daily, for 7 days" in schedule
+    assert "Paracetamol 1g, every 6 hours as needed" in schedule
+    assert "Take with food." in schedule
+
+
+def test_real_provider_prompt_includes_prescription(monkeypatch):
+    import json as _json
+    from app.config import settings
+    from providers.ai_provider import PrescribedMedication, RealAIProvider
+
+    monkeypatch.setattr(settings, "AI_PROVIDER_API_KEY", "test-key")
+    captured = {}
+
+    class _Resp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"choices": [{"message": {"content": _json.dumps(
+                {"summary": "s", "medication_schedule": "m", "follow_up_steps": "f"})}}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured["messages"] = json["messages"]
+        return _Resp()
+
+    monkeypatch.setattr("providers.ai_provider.httpx.post", fake_post)
+    RealAIProvider().generate_post_visit_summary(
+        "Acute sinusitis.",
+        medications=[PrescribedMedication("Amoxicillin", "500mg", "three times daily", 7)],
+        prescription_instructions="Take with food.",
+    )
+    user_prompt = captured["messages"][1]["content"]
+    assert "Acute sinusitis." in user_prompt
+    assert "- Amoxicillin 500mg, three times daily, for 7 days" in user_prompt
+    assert "Instructions: Take with food." in user_prompt
+    assert "Prescription section" in captured["messages"][0]["content"]
 
 
 def test_consultation_rejected_for_cancelled_appointment(client):

@@ -112,7 +112,7 @@ class FailingAIProvider(AIProvider):
     def generate_pre_visit_summary(self, symptoms):
         raise self._exc
 
-    def generate_post_visit_summary(self, notes):
+    def generate_post_visit_summary(self, notes, **_):
         raise self._exc
 
 
@@ -123,7 +123,7 @@ class FixedAIProvider(AIProvider):
     def generate_pre_visit_summary(self, symptoms):
         return self._pre
 
-    def generate_post_visit_summary(self, notes):
+    def generate_post_visit_summary(self, notes, **_):
         return self._post
 
 

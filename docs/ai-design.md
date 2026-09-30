@@ -5,7 +5,7 @@
 The AI subsystem generates two summaries during an appointment's lifecycle:
 
 - **Pre-visit summary** — generated from the patient's submitted symptoms, before the visit, so the doctor has an urgency level, chief complaint, and suggested questions ready.
-- **Post-visit summary** — generated from the doctor's consultation notes, after the visit, so the patient gets a plain-language summary, medication schedule, and follow-up steps.
+- **Post-visit summary** — generated from the doctor's consultation notes and prescription, after the visit, so the patient gets a plain-language summary, medication schedule, and follow-up steps.
 
 The AI is **advisory only**. It never creates, modifies, or cancels an appointment, and it never produces a diagnosis — it summarizes and triages tone/urgency from patient-reported text.
 
@@ -13,7 +13,7 @@ The AI is **advisory only**. It never creates, modifies, or cancels an appointme
 
 ```
 AIProvider (abstract)
-├── MockAIProvider   — deterministic, offline, used when DEMO_MODE=true
+├── MockAIProvider   — deterministic, offline, used when AI mode is demo (see below)
 └── RealAIProvider   — calls an OpenAI-compatible /chat/completions endpoint
 
 AIService
@@ -22,7 +22,7 @@ AIService
 └── never touches Appointment rows
 ```
 
-`AIService` resolves its provider via `providers.ai_provider.get_ai_provider()`, which reads `settings.DEMO_MODE` at call time — so switching `DEMO_MODE` off/on takes effect without a restart-sensitive cache. Tests inject a fake `AIProvider` directly into `AIService(provider=...)` to simulate timeouts, unavailability, and malformed output without any network dependency.
+`AIService` resolves its provider via `providers.ai_provider.get_ai_provider()`, which reads `settings.ai_demo_mode` (`AI_DEMO_MODE`, falling back to `DEMO_MODE`) at call time — so switching either off/on takes effect without a restart-sensitive cache. Tests inject a fake `AIProvider` directly into `AIService(provider=...)` to simulate timeouts, unavailability, and malformed output without any network dependency.
 
 ## Prompt templates
 
@@ -33,6 +33,12 @@ Taken verbatim from AGENT_SPEC.md's "LLM Usage Guidance" (`backend/providers/ai_
 
 **Post-visit:**
 > Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: `<notes>`
+>
+> Prescription:
+> `- <name> <dosage>, <frequency>, for <n> days` (one line per medication, or "No medications prescribed.")
+> `Instructions: <prescription instructions>`
+
+The prescription block is appended so the medication schedule is built from what the doctor actually prescribed rather than guessed from free-text notes; the system prompt tells the model to copy every medication exactly and never add, remove or change one.
 
 Each is paired with a system prompt instructing the model to return *only* a JSON object of the exact required shape, with no diagnosis and no text outside the JSON. `RealAIProvider` also sets `response_format: {"type": "json_object"}` on the request as a second layer of enforcement, on top of the Pydantic validation described below.
 
@@ -82,12 +88,14 @@ The appointment row is never read for write, never locked, and never touched by 
 
 ## DEMO_MODE
 
-When `DEMO_MODE=true` (the default), `get_ai_provider()` always returns `MockAIProvider`, which:
+The AI provider is chosen by `AI_DEMO_MODE` when it is set, and by `DEMO_MODE` when `AI_DEMO_MODE` is unset or blank. So `DEMO_MODE=true` with `AI_DEMO_MODE=false` uses the real LLM (while email and calendar stay mocked), and `DEMO_MODE=false` with `AI_DEMO_MODE=true` keeps the AI mocked. `GET /health` reports the result as `ai_provider: "mock" | "real"`.
+
+When the AI is in demo mode (the default: both unset → `DEMO_MODE=true`), `get_ai_provider()` returns `MockAIProvider`, which:
 - never makes a network call,
 - derives urgency from simple keyword matching in the symptom text (e.g. "chest pain", "severe" → High; "mild", "slight" → Low; otherwise Medium),
 - always returns a schema-valid response, so the happy path is fully exercisable without any LLM credentials.
 
-Setting `DEMO_MODE=false` switches to `RealAIProvider`, which requires `AI_PROVIDER_API_KEY` and calls the OpenAI-compatible endpoint configured by `AI_PROVIDER_BASE_URL` / `AI_PROVIDER_MODEL` (see `.env.example`). Any provider that exposes an OpenAI-compatible `/chat/completions` API works without code changes.
+When the AI is not in demo mode (`AI_DEMO_MODE=false`, or `DEMO_MODE=false` with `AI_DEMO_MODE` unset), `get_ai_provider()` returns `RealAIProvider`, which requires `AI_PROVIDER_API_KEY` and calls the OpenAI-compatible endpoint configured by `AI_PROVIDER_BASE_URL` / `AI_PROVIDER_MODEL` (see `.env.example`). Any provider that exposes an OpenAI-compatible `/chat/completions` API works without code changes.
 
 ## Explicitly out of scope
 

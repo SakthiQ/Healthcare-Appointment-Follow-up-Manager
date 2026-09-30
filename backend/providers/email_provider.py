@@ -80,7 +80,8 @@ class RealEmailProvider(EmailProvider):
 
 def get_email_provider() -> EmailProvider:
     """Resolve the active provider based on current settings (read live, not
-    cached, so DEMO_MODE toggles and test overrides take effect immediately)."""
-    if settings.DEMO_MODE:
+    cached, so DEMO_MODE toggles and test overrides take effect immediately).
+    EMAIL_DEMO_MODE, when set, overrides DEMO_MODE for this integration only."""
+    if settings.email_demo_mode:
         return MockEmailProvider()
     return RealEmailProvider()

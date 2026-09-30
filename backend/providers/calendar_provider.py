@@ -238,7 +238,8 @@ class GoogleCalendarProvider(CalendarProvider):
 
 def get_calendar_provider() -> CalendarProvider:
     """Resolve the active provider from current settings (read live, not
-    cached, so DEMO_MODE toggles and test overrides take effect immediately)."""
-    if settings.DEMO_MODE:
+    cached, so DEMO_MODE toggles and test overrides take effect immediately).
+    CALENDAR_DEMO_MODE, when set, overrides DEMO_MODE for this integration only."""
+    if settings.calendar_demo_mode:
         return MockCalendarProvider()
     return GoogleCalendarProvider()

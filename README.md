@@ -120,9 +120,10 @@ Summary:
 | `DEMO_MODE` | `True` → Mock AI/Email/Calendar providers, zero external credentials needed | always (default `True`) |
 | `ALLOW_PRIVILEGED_SELF_REGISTRATION` | Gates whether `/auth/register` can create anything but a PATIENT | always — **must stay `False`** outside tests, see [below](#creating-the-first-admin-account) |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allow-list for the frontend origin | always |
-| `AI_PROVIDER_*` | OpenAI-compatible LLM endpoint/key/model | `DEMO_MODE=False` |
-| `SMTP_*`, `EMAIL_FROM_ADDRESS` | SMTP relay for real email | `DEMO_MODE=False` |
-| `GOOGLE_*` | OAuth 2.0 client + refresh token for Calendar API | `DEMO_MODE=False` |
+| `AI_DEMO_MODE`, `EMAIL_DEMO_MODE`, `CALENDAR_DEMO_MODE` | Per-integration override of `DEMO_MODE` (unset = follow it) | optional |
+| `AI_PROVIDER_*` | OpenAI-compatible LLM endpoint/key/model (OpenAI, Gemini, Groq, …) | AI is real |
+| `SMTP_*`, `EMAIL_FROM_ADDRESS` | SMTP relay for real email | email is real |
+| `GOOGLE_*` | OAuth 2.0 client + refresh token for Calendar API | calendar is real |
 | `NOTIFICATION_MAX_ATTEMPTS`, `CALENDAR_MAX_ATTEMPTS` | Bounded retry counts | optional (sensible defaults) |
 | `VITE_API_BASE_URL` | Frontend: backend origin in production (empty = same-origin/dev proxy) | production build |
 
@@ -136,7 +137,9 @@ Never commit a real `.env` — `.gitignore` excludes it; only `.env.example` fil
 store). The entire application — booking, AI summaries, notifications, calendar sync —
 works end-to-end with zero external credentials. This is what every automated test and
 the Phase 11 manual browser verification actually exercised. Flip to `DEMO_MODE=False`
-only once real `AI_PROVIDER_*`/`SMTP_*`/`GOOGLE_*` credentials are configured.
+only once real `AI_PROVIDER_*`/`SMTP_*`/`GOOGLE_*` credentials are configured — or switch
+one integration at a time with `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` or `CALENDAR_DEMO_MODE`
+(e.g. `AI_DEMO_MODE=False` for a real LLM while email and calendar stay mocked).
 
 ## Creating the first admin account
 
