@@ -16,8 +16,8 @@ CalendarWorker.run_once  →  CalendarService.process_pending_row
                                    │
                                    ▼
                           CalendarProvider
-                          ├── MockCalendarProvider    (DEMO_MODE=true)
-                          └── GoogleCalendarProvider  (DEMO_MODE=false)
+                          ├── MockCalendarProvider    (calendar demo mode on)
+                          └── GoogleCalendarProvider  (calendar demo mode off)
 ```
 
 A booking/reschedule/cancellation only ever writes a local row saying "this
@@ -61,7 +61,9 @@ hardcoded, never committed.
    enable "Use your own OAuth credentials", enter your client id/secret,
    authorize the `calendar.events` scope, then exchange the authorization code
    for tokens. Copy the resulting refresh token into `GOOGLE_REFRESH_TOKEN`.
-6. **Set `DEMO_MODE=false`** to activate `GoogleCalendarProvider`.
+6. **Turn off calendar demo mode** to activate `GoogleCalendarProvider`: set
+   `CALENDAR_DEMO_MODE=false` (leaves AI and email on whatever `DEMO_MODE` says), or
+   `DEMO_MODE=false` to switch every integration that has no override of its own.
 
 `GoogleCalendarProvider` exchanges the refresh token for a short-lived access
 token on demand and caches it in memory until ~60s before expiry, so the
@@ -108,9 +110,9 @@ to `appointments`, and `AppointmentService` wraps its calendar call in
 
 ## DEMO_MODE
 
-With `DEMO_MODE=true` (the default), `get_calendar_provider()` returns
-`MockCalendarProvider`, which keeps events in memory and never makes a network
-call. The complete booking → reschedule → cancel calendar flow is therefore
+With calendar demo mode on — `CALENDAR_DEMO_MODE=true`, or unset with `DEMO_MODE=true`
+(the default) — `get_calendar_provider()` returns `MockCalendarProvider`, which keeps
+events in memory and never makes a network call. The complete booking → reschedule → cancel calendar flow is therefore
 exercisable by an evaluator with no Google account and no credentials.
 
 ## Running the worker

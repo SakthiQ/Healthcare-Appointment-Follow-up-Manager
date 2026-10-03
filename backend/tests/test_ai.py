@@ -324,7 +324,9 @@ _CONSULTATION_WITH_PRESCRIPTION = {
 class _RecordingProvider(_FixedProvider):
     def __init__(self):
         super().__init__(post_visit_output={
-            "summary": "s", "medication_schedule": "m", "follow_up_steps": "f",
+            "summary": "s",
+            "medication_schedule": "Amoxicillin 500mg three times daily; Paracetamol 1g every 6 hours.",
+            "follow_up_steps": "f",
         })
         self.post_visit_calls = []
 
@@ -365,6 +367,42 @@ def test_mock_post_visit_schedule_lists_prescribed_medications(client):
     assert "Amoxicillin 500mg, three times daily, for 7 days" in schedule
     assert "Paracetamol 1g, every 6 hours as needed" in schedule
     assert "Take with food." in schedule
+
+
+def _post_visit_with_schedule(client, schedule):
+    appt, _, _, _, doc_headers = setup_ai_test_env(client)
+    r = client.post(f"/api/v1/appointments/{appt['id']}/consultation",
+                    json=_CONSULTATION_WITH_PRESCRIPTION, headers=doc_headers)
+    assert r.status_code == 201
+    _override_ai_service(_FixedProvider(post_visit_output={
+        "summary": "s", "medication_schedule": schedule, "follow_up_steps": "f",
+    }))
+    try:
+        r = client.post(f"/api/v1/appointments/{appt['id']}/ai/post-visit-summary", headers=doc_headers)
+    finally:
+        _restore_ai_service()
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_post_visit_schedule_with_wrong_dose_is_rejected(client):
+    data = _post_visit_with_schedule(
+        client, "Amoxicillin 250mg three times daily. Paracetamol 1g every 6 hours.")
+    assert data["status"] == AISummaryStatus.FAILED.value
+    assert data["payload"] is None
+    assert "Amoxicillin" in data["error_message"]
+
+
+def test_post_visit_schedule_missing_a_medication_is_rejected(client):
+    data = _post_visit_with_schedule(client, "Amoxicillin 500mg three times daily.")
+    assert data["status"] == AISummaryStatus.FAILED.value
+    assert "Paracetamol" in data["error_message"]
+
+
+def test_post_visit_schedule_match_ignores_case_and_spacing(client):
+    data = _post_visit_with_schedule(
+        client, "AMOXICILLIN 500 mg, three times daily; paracetamol 1 g every 6 hours.")
+    assert data["status"] == AISummaryStatus.SUCCESS.value
 
 
 def test_real_provider_prompt_includes_prescription(monkeypatch):

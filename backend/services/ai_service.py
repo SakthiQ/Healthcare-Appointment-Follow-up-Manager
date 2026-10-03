@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List
+from typing import Any, Callable, Optional, List, Sequence
 from sqlalchemy.orm import Session
 from pydantic import ValidationError as PydanticValidationError
 
@@ -40,6 +40,24 @@ def _authorize_appointment_participant(appointment, user: User) -> None:
     if user.role == UserRole.DOCTOR and appointment.doctor_id == user.id:
         return
     raise ForbiddenError("Not authorized to access this appointment.")
+
+
+def _squash(text: str) -> str:
+    return "".join(text.lower().split())
+
+
+def _schedule_mismatch(schedule: str, medications: Sequence[PrescribedMedication]) -> Optional[str]:
+    """The prompt tells the LLM to copy each prescribed medication verbatim, but nothing
+    enforces it. Reject a schedule that omits any prescribed name or dosage rather than
+    show the patient a wrong one. Whitespace/case-insensitive so "500 mg" matches "500mg"."""
+    squashed = _squash(schedule)
+    missing = [
+        m.name for m in medications
+        if _squash(m.name) not in squashed or _squash(m.dosage) not in squashed
+    ]
+    if missing:
+        return "AI medication schedule does not match the prescription (missing: " + ", ".join(missing) + ")."
+    return None
 
 
 class AIService:
@@ -199,6 +217,7 @@ class AIService:
                 medications=medications,
                 prescription_instructions=instructions,
             ),
+            verify=lambda output: _schedule_mismatch(output.medication_schedule, medications),
         )
         return AISummaryResponse.model_validate(summary)
 
@@ -214,7 +233,12 @@ class AIService:
         return AISummaryResponse.model_validate(summary)
 
     # --- Shared generation + graceful-failure pipeline ---
-    def _run_generation(self, db: Session, appointment_id: str, summary_type: AISummaryType, output_model, call):
+    def _run_generation(
+        self, db: Session, appointment_id: str, summary_type: AISummaryType, output_model, call,
+        verify: Optional[Callable[[Any], Optional[str]]] = None,
+    ):
+        """`verify`, when given, receives the schema-valid output and returns an error
+        message if its content is unacceptable (recorded as FAILED), else None."""
         provider = self._provider()
         try:
             raw_output = call(provider)
@@ -235,6 +259,13 @@ class AIService:
             return clinical_repository.create_ai_summary(
                 db, appointment_id, summary_type, AISummaryStatus.FAILED,
                 error_message=f"Invalid AI response schema: {exc}"
+            )
+
+        problem = verify(validated) if verify else None
+        if problem:
+            return clinical_repository.create_ai_summary(
+                db, appointment_id, summary_type, AISummaryStatus.FAILED,
+                error_message=problem
             )
 
         return clinical_repository.create_ai_summary(

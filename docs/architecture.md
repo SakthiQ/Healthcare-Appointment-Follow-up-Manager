@@ -355,7 +355,13 @@ When `DEMO_MODE=true` in environment:
 
 The application remains fully functional with deterministic, predictable responses. No external API keys required.
 
-Provider selection is handled in `dependencies.py` based on `config.DEMO_MODE`.
+Each integration can be switched on its own: `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` and `CALENDAR_DEMO_MODE`
+override `DEMO_MODE` for that integration (unset or blank = follow `DEMO_MODE`). For example,
+`DEMO_MODE=true` with `AI_DEMO_MODE=false` runs a real LLM while email and calendar stay mocked.
+
+Provider selection is handled by the `get_ai_provider()`, `get_email_provider()` and
+`get_calendar_provider()` factories, which read `settings.ai_demo_mode` / `email_demo_mode` /
+`calendar_demo_mode` (the per-integration value, falling back to `DEMO_MODE`) at call time.
 
 ---
 
