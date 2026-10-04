@@ -62,8 +62,10 @@ hardcoded, never committed.
    authorize the `calendar.events` scope, then exchange the authorization code
    for tokens. Copy the resulting refresh token into `GOOGLE_REFRESH_TOKEN`.
 6. **Turn off calendar demo mode** to activate `GoogleCalendarProvider`: set
-   `CALENDAR_DEMO_MODE=false` (leaves AI and email on whatever `DEMO_MODE` says), or
-   `DEMO_MODE=false` to switch every integration that has no override of its own.
+   `CALENDAR_DEMO_MODE=false`. AI and email are unaffected: each follows `DEMO_MODE` only
+   while its own `AI_DEMO_MODE` / `EMAIL_DEMO_MODE` is unset, and a value set there always
+   takes precedence. Alternatively, set `DEMO_MODE=false` to switch every integration
+   that has no override of its own.
 
 `GoogleCalendarProvider` exchanges the refresh token for a short-lived access
 token on demand and caches it in memory until ~60s before expiry, so the
@@ -112,8 +114,9 @@ to `appointments`, and `AppointmentService` wraps its calendar call in
 
 With calendar demo mode on — `CALENDAR_DEMO_MODE=true`, or unset with `DEMO_MODE=true`
 (the default) — `get_calendar_provider()` returns `MockCalendarProvider`, which keeps
-events in memory and never makes a network call. The complete booking → reschedule → cancel calendar flow is therefore
-exercisable by an evaluator with no Google account and no credentials.
+events in memory and never makes a network call. The complete booking → reschedule →
+cancel calendar flow is therefore exercisable by an evaluator with no Google account and
+no credentials.
 
 ## Running the worker
 

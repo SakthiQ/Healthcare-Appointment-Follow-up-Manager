@@ -75,7 +75,7 @@ The provider's raw response is never trusted or stored directly — it always pa
 | Provider unreachable / non-2xx | `AIProviderUnavailableError` | `AISummary(status=FAILED, error_message=...)` |
 | Provider response isn't valid JSON | `AIProviderMalformedResponseError` | `AISummary(status=FAILED, error_message=...)` |
 | JSON parses but violates the schema (bad urgency, wrong question count, missing field) | `pydantic.ValidationError` on `model_validate` | `AISummary(status=FAILED, error_message="Invalid AI response schema: ...")` |
-| Post-visit `medication_schedule` omits a prescribed medication's name or dosage (compared ignoring case and whitespace, so `500 mg` matches `500mg`) | `_schedule_mismatch` via `_run_generation`'s `verify` hook | `AISummary(status=FAILED, error_message="AI medication schedule does not match the prescription (missing: ...)")` |
+| Post-visit `medication_schedule` omits a prescribed medication, or doesn't follow its name with its own dosage (so doses swapped between two drugs fail, and `500mg` doesn't match inside `1500mg`; case and whitespace are ignored, so `500 mg` matches `500mg`). The dosage must come after the name, as in the prompt's `Name dosage, frequency` lines; `500mg of Amoxicillin` fails | `_schedule_mismatch` via `_run_generation`'s `verify` hook | `AISummary(status=FAILED, error_message="AI medication schedule does not match the prescription (mismatched: ...)")` |
 | Any other unexpected exception from the provider | generic `Exception` catch | `AISummary(status=FAILED, error_message=...)` |
 | Success | — | `AISummary(status=SUCCESS, payload=<validated dict>)` |
 

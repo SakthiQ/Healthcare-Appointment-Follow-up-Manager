@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Callable, Optional, List, Sequence
 from sqlalchemy.orm import Session
 from pydantic import ValidationError as PydanticValidationError
@@ -42,21 +43,45 @@ def _authorize_appointment_participant(appointment, user: User) -> None:
     raise ForbiddenError("Not authorized to access this appointment.")
 
 
-def _squash(text: str) -> str:
-    return "".join(text.lower().split())
+def _flexible(text: str) -> str:
+    """Regex source matching `text` ignoring case (via re.I) and whitespace, so "500 mg"
+    matches "500mg"."""
+    return r"\s*".join(re.escape(c) for c in text if not c.isspace())
 
 
 def _schedule_mismatch(schedule: str, medications: Sequence[PrescribedMedication]) -> Optional[str]:
     """The prompt tells the LLM to copy each prescribed medication verbatim, but nothing
-    enforces it. Reject a schedule that omits any prescribed name or dosage rather than
-    show the patient a wrong one. Whitespace/case-insensitive so "500 mg" matches "500mg"."""
-    squashed = _squash(schedule)
-    missing = [
-        m.name for m in medications
-        if _squash(m.name) not in squashed or _squash(m.dosage) not in squashed
-    ]
-    if missing:
-        return "AI medication schedule does not match the prescription (missing: " + ", ".join(missing) + ")."
+    enforces it. Reject a schedule in which any prescribed medication is absent, or is not
+    followed by its own dosage, rather than show the patient a wrong one.
+
+    A dosage only counts if it follows the medication's name and precedes the next
+    prescribed name, so doses swapped between two medications fail. Digit boundaries stop
+    "500mg" matching inside "1500mg", "2.5mg" or "500.5mg". Case and whitespace are ignored."""
+    name_res = [re.compile(r"(?<![A-Za-z])" + _flexible(m.name) + r"(?![A-Za-z])", re.I) for m in medications]
+    dose_res = [re.compile(r"(?<!\d)(?<!\d[.,])" + _flexible(m.dosage) + r"(?!\d|[.,]\d)", re.I)
+                for m in medications]
+
+    occurrences = sorted(
+        (match.start(), match.end(), index)
+        for index, name_re in enumerate(name_res)
+        for match in name_re.finditer(schedule)
+    )
+
+    mismatched = []
+    for index, med in enumerate(medications):
+        matched = False
+        for start, end, found in occurrences:
+            if found != index:
+                continue
+            segment_end = next((s for s, _, _ in occurrences if s >= end), len(schedule))
+            if dose_res[index].search(schedule, end, segment_end):
+                matched = True
+                break
+        if not matched:
+            mismatched.append(med.name)
+
+    if mismatched:
+        return "AI medication schedule does not match the prescription (mismatched: " + ", ".join(mismatched) + ")."
     return None
 
 

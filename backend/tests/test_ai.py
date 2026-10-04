@@ -405,6 +405,36 @@ def test_post_visit_schedule_match_ignores_case_and_spacing(client):
     assert data["status"] == AISummaryStatus.SUCCESS.value
 
 
+def _mismatch(schedule, *meds):
+    from providers.ai_provider import PrescribedMedication
+    from services.ai_service import _schedule_mismatch
+    return _schedule_mismatch(schedule, [PrescribedMedication(n, d, "daily") for n, d in meds])
+
+
+def test_schedule_check_rejects_doses_swapped_between_medications():
+    meds = [("Amoxicillin", "500mg"), ("Paracetamol", "250mg")]
+    assert _mismatch("Amoxicillin 500mg daily; Paracetamol 250mg daily.", *meds) is None
+    swapped = _mismatch("Amoxicillin 250mg daily; Paracetamol 500mg daily.", *meds)
+    assert "Amoxicillin" in swapped and "Paracetamol" in swapped
+
+
+def test_schedule_check_dose_must_match_on_digit_boundaries():
+    assert _mismatch("Amoxicillin 1500mg daily.", ("Amoxicillin", "500mg")) is not None
+    assert _mismatch("Amoxicillin 2.5mg daily.", ("Amoxicillin", "5mg")) is not None
+    assert _mismatch("Amoxicillin 500.5mg daily.", ("Amoxicillin", "500mg")) is not None
+    assert _mismatch("Amoxicillin 500 mg, daily.", ("Amoxicillin", "500mg")) is None
+
+
+def test_schedule_check_same_medication_prescribed_twice_with_different_doses():
+    meds = [("Prednisolone", "20mg"), ("Prednisolone", "10mg")]
+    assert _mismatch("Prednisolone 20mg for 3 days, then Prednisolone 10mg for 3 days.", *meds) is None
+    assert _mismatch("Prednisolone 20mg for 3 days, then Prednisolone 5mg for 3 days.", *meds) is not None
+
+
+def test_schedule_check_passes_when_nothing_prescribed():
+    assert _mismatch("No medications were prescribed at this visit.") is None
+
+
 def test_real_provider_prompt_includes_prescription(monkeypatch):
     import json as _json
     from app.config import settings

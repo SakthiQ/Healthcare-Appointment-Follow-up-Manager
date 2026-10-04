@@ -146,7 +146,7 @@ one integration at a time with `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` or `CALENDAR_DE
 is only the global `DEMO_MODE` default, so it can read `true` while one integration is real.
 
 With a real LLM, the post-visit medication schedule is checked against the prescription:
-if it omits any prescribed medication name or dosage, the summary is stored as `FAILED`
+if it omits a prescribed medication or doesn't give it its own dosage, the summary is stored as `FAILED`
 (the doctor can regenerate) rather than shown to the patient.
 
 ## Creating the first admin account
