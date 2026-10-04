@@ -425,6 +425,13 @@ def test_schedule_check_dose_must_match_on_digit_boundaries():
     assert _mismatch("Amoxicillin 500 mg, daily.", ("Amoxicillin", "500mg")) is None
 
 
+def test_schedule_check_name_must_match_on_alphanumeric_boundaries():
+    assert _mismatch("Vitamin B12 10mg daily.", ("Vitamin B1", "10mg")) is not None
+    assert _mismatch("Vitamin B1 10mg daily.", ("Vitamin B1", "10mg")) is None
+    assert _mismatch("Vitamin B1 10mg daily; Vitamin B12 10mg weekly.",
+                     ("Vitamin B1", "10mg"), ("Vitamin B12", "10mg")) is None
+
+
 def test_schedule_check_same_medication_prescribed_twice_with_different_doses():
     meds = [("Prednisolone", "20mg"), ("Prednisolone", "10mg")]
     assert _mismatch("Prednisolone 20mg for 3 days, then Prednisolone 10mg for 3 days.", *meds) is None

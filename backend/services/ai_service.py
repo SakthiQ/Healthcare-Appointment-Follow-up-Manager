@@ -56,8 +56,12 @@ def _schedule_mismatch(schedule: str, medications: Sequence[PrescribedMedication
 
     A dosage only counts if it follows the medication's name and precedes the next
     prescribed name, so doses swapped between two medications fail. Digit boundaries stop
-    "500mg" matching inside "1500mg", "2.5mg" or "500.5mg". Case and whitespace are ignored."""
-    name_res = [re.compile(r"(?<![A-Za-z])" + _flexible(m.name) + r"(?![A-Za-z])", re.I) for m in medications]
+    "500mg" matching inside "1500mg", "2.5mg" or "500.5mg", and alphanumeric boundaries on
+    names stop "Vitamin B1" matching inside "Vitamin B12". Case and whitespace are ignored.
+    (Patterns are built from re.escape'd characters joined by `\\s*`, with no nested
+    quantifiers, so doctor-entered names and doses cannot cause catastrophic backtracking.)"""
+    name_res = [re.compile(r"(?<![A-Za-z0-9])" + _flexible(m.name) + r"(?![A-Za-z0-9])", re.I)
+                for m in medications]
     dose_res = [re.compile(r"(?<!\d)(?<!\d[.,])" + _flexible(m.dosage) + r"(?!\d|[.,]\d)", re.I)
                 for m in medications]
 
