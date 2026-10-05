@@ -32,14 +32,15 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # LLM provider (used only when DEMO_MODE is False; MockAIProvider requires none of this)
+    # LLM provider (used only when AI demo mode is off, i.e. AI_DEMO_MODE=False or, if
+    # that is unset, DEMO_MODE=False; MockAIProvider requires none of this)
     AI_PROVIDER_API_KEY: Optional[str] = None
     AI_PROVIDER_BASE_URL: str = "https://api.openai.com/v1"
     AI_PROVIDER_MODEL: str = "gpt-4o-mini"
     AI_PROVIDER_TIMEOUT_SECONDS: float = 15.0
 
-    # Email provider (Phase 9). Only used when DEMO_MODE is False; MockEmailProvider
-    # requires none of this. Any SMTP-compatible provider (SendGrid, Mailgun, etc.
+    # Email provider (Phase 9). Only used when email demo mode is off (EMAIL_DEMO_MODE=False
+    # or, if unset, DEMO_MODE=False); MockEmailProvider requires none of this. Any SMTP-compatible provider (SendGrid, Mailgun, etc.
     # all offer SMTP relay) works without code changes.
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 587
@@ -51,7 +52,8 @@ class Settings(BaseSettings):
 
     NOTIFICATION_MAX_ATTEMPTS: int = 5
 
-    # Google Calendar / OAuth 2.0 (Phase 10). Only used when DEMO_MODE is False;
+    # Google Calendar / OAuth 2.0 (Phase 10). Only used when calendar demo mode is off
+    # (CALENDAR_DEMO_MODE=False or, if unset, DEMO_MODE=False);
     # MockCalendarProvider requires none of this. Never hardcode these — the
     # refresh token is obtained once via the OAuth consent flow (see README).
     GOOGLE_CLIENT_ID: Optional[str] = None

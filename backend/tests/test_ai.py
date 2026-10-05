@@ -324,7 +324,9 @@ _CONSULTATION_WITH_PRESCRIPTION = {
 class _RecordingProvider(_FixedProvider):
     def __init__(self):
         super().__init__(post_visit_output={
-            "summary": "s", "medication_schedule": "m", "follow_up_steps": "f",
+            "summary": "s",
+            "medication_schedule": "Amoxicillin 500mg three times daily; Paracetamol 1g every 6 hours.",
+            "follow_up_steps": "f",
         })
         self.post_visit_calls = []
 
@@ -365,6 +367,79 @@ def test_mock_post_visit_schedule_lists_prescribed_medications(client):
     assert "Amoxicillin 500mg, three times daily, for 7 days" in schedule
     assert "Paracetamol 1g, every 6 hours as needed" in schedule
     assert "Take with food." in schedule
+
+
+def _post_visit_with_schedule(client, schedule):
+    appt, _, _, _, doc_headers = setup_ai_test_env(client)
+    r = client.post(f"/api/v1/appointments/{appt['id']}/consultation",
+                    json=_CONSULTATION_WITH_PRESCRIPTION, headers=doc_headers)
+    assert r.status_code == 201
+    _override_ai_service(_FixedProvider(post_visit_output={
+        "summary": "s", "medication_schedule": schedule, "follow_up_steps": "f",
+    }))
+    try:
+        r = client.post(f"/api/v1/appointments/{appt['id']}/ai/post-visit-summary", headers=doc_headers)
+    finally:
+        _restore_ai_service()
+    assert r.status_code == 200
+    return r.json()
+
+
+def test_post_visit_schedule_with_wrong_dose_is_rejected(client):
+    data = _post_visit_with_schedule(
+        client, "Amoxicillin 250mg three times daily. Paracetamol 1g every 6 hours.")
+    assert data["status"] == AISummaryStatus.FAILED.value
+    assert data["payload"] is None
+    assert "Amoxicillin" in data["error_message"]
+
+
+def test_post_visit_schedule_missing_a_medication_is_rejected(client):
+    data = _post_visit_with_schedule(client, "Amoxicillin 500mg three times daily.")
+    assert data["status"] == AISummaryStatus.FAILED.value
+    assert "Paracetamol" in data["error_message"]
+
+
+def test_post_visit_schedule_match_ignores_case_and_spacing(client):
+    data = _post_visit_with_schedule(
+        client, "AMOXICILLIN 500 mg, three times daily; paracetamol 1 g every 6 hours.")
+    assert data["status"] == AISummaryStatus.SUCCESS.value
+
+
+def _mismatch(schedule, *meds):
+    from providers.ai_provider import PrescribedMedication
+    from services.ai_service import _schedule_mismatch
+    return _schedule_mismatch(schedule, [PrescribedMedication(n, d, "daily") for n, d in meds])
+
+
+def test_schedule_check_rejects_doses_swapped_between_medications():
+    meds = [("Amoxicillin", "500mg"), ("Paracetamol", "250mg")]
+    assert _mismatch("Amoxicillin 500mg daily; Paracetamol 250mg daily.", *meds) is None
+    swapped = _mismatch("Amoxicillin 250mg daily; Paracetamol 500mg daily.", *meds)
+    assert "Amoxicillin" in swapped and "Paracetamol" in swapped
+
+
+def test_schedule_check_dose_must_match_on_digit_boundaries():
+    assert _mismatch("Amoxicillin 1500mg daily.", ("Amoxicillin", "500mg")) is not None
+    assert _mismatch("Amoxicillin 2.5mg daily.", ("Amoxicillin", "5mg")) is not None
+    assert _mismatch("Amoxicillin 500.5mg daily.", ("Amoxicillin", "500mg")) is not None
+    assert _mismatch("Amoxicillin 500 mg, daily.", ("Amoxicillin", "500mg")) is None
+
+
+def test_schedule_check_name_must_match_on_alphanumeric_boundaries():
+    assert _mismatch("Vitamin B12 10mg daily.", ("Vitamin B1", "10mg")) is not None
+    assert _mismatch("Vitamin B1 10mg daily.", ("Vitamin B1", "10mg")) is None
+    assert _mismatch("Vitamin B1 10mg daily; Vitamin B12 10mg weekly.",
+                     ("Vitamin B1", "10mg"), ("Vitamin B12", "10mg")) is None
+
+
+def test_schedule_check_same_medication_prescribed_twice_with_different_doses():
+    meds = [("Prednisolone", "20mg"), ("Prednisolone", "10mg")]
+    assert _mismatch("Prednisolone 20mg for 3 days, then Prednisolone 10mg for 3 days.", *meds) is None
+    assert _mismatch("Prednisolone 20mg for 3 days, then Prednisolone 5mg for 3 days.", *meds) is not None
+
+
+def test_schedule_check_passes_when_nothing_prescribed():
+    assert _mismatch("No medications were prescribed at this visit.") is None
 
 
 def test_real_provider_prompt_includes_prescription(monkeypatch):

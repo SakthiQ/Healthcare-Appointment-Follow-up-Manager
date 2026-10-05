@@ -141,6 +141,14 @@ only once real `AI_PROVIDER_*`/`SMTP_*`/`GOOGLE_*` credentials are configured �
 one integration at a time with `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` or `CALENDAR_DEMO_MODE`
 (e.g. `AI_DEMO_MODE=False` for a real LLM while email and calendar stay mocked).
 
+`GET /health` reports the result per integration as `ai_provider`, `email_provider` and
+`calendar_provider` (`"mock"` or `"real"`) — those are authoritative. Its `demo_mode` field
+is only the global `DEMO_MODE` default, so it can read `true` while one integration is real.
+
+With a real LLM, the post-visit medication schedule is checked against the prescription:
+if it omits a prescribed medication or doesn't give it its own dosage, the summary is stored as `FAILED`
+(the doctor can regenerate) rather than shown to the patient.
+
 ## Creating the first admin account
 
 **`POST /auth/register` only ever creates a PATIENT account** unless
@@ -213,7 +221,7 @@ Full step-by-step (Cloud project, OAuth consent screen, obtaining a refresh toke
 the OAuth 2.0 Playground) in `docs/google-calendar-setup.md`. Summary: create OAuth 2.0
 credentials in Google Cloud Console, enable the Calendar API, obtain a refresh token
 with the `calendar.events` scope, and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
-`GOOGLE_REFRESH_TOKEN` with `DEMO_MODE=False`. Calendar sync is fully decoupled from the
+`GOOGLE_REFRESH_TOKEN` with `CALENDAR_DEMO_MODE=False` (or `DEMO_MODE=False`). Calendar sync is fully decoupled from the
 booking transaction (see [Architecture](#architecture)) — a Google outage never blocks
 or fails a booking.
 

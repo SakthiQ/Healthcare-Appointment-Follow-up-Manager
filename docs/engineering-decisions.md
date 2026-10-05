@@ -28,4 +28,4 @@
 
 ### 6. Background Processing & DEMO_MODE
 - **Background Worker:** A lightweight, process-internal Python worker handles retries and async tasks without needing external message queues like Celery or Redis.
-- **DEMO_MODE Support:** Switching `DEMO_MODE=true` substitutes external provider implementations with deterministic mock providers, enabling full system evaluation without external API credentials.
+- **DEMO_MODE Support:** Switching `DEMO_MODE=true` substitutes external provider implementations with deterministic mock providers, enabling full system evaluation without external API credentials. `AI_DEMO_MODE`, `EMAIL_DEMO_MODE` and `CALENDAR_DEMO_MODE` can override it per integration (unset = follow `DEMO_MODE`).

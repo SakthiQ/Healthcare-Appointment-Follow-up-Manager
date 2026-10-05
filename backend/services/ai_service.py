@@ -1,5 +1,6 @@
 import logging
-from typing import Optional, List
+import re
+from typing import Any, Callable, Optional, List, Sequence
 from sqlalchemy.orm import Session
 from pydantic import ValidationError as PydanticValidationError
 
@@ -40,6 +41,52 @@ def _authorize_appointment_participant(appointment, user: User) -> None:
     if user.role == UserRole.DOCTOR and appointment.doctor_id == user.id:
         return
     raise ForbiddenError("Not authorized to access this appointment.")
+
+
+def _flexible(text: str) -> str:
+    """Regex source matching `text` ignoring case (via re.I) and whitespace, so "500 mg"
+    matches "500mg"."""
+    return r"\s*".join(re.escape(c) for c in text if not c.isspace())
+
+
+def _schedule_mismatch(schedule: str, medications: Sequence[PrescribedMedication]) -> Optional[str]:
+    """The prompt tells the LLM to copy each prescribed medication verbatim, but nothing
+    enforces it. Reject a schedule in which any prescribed medication is absent, or is not
+    followed by its own dosage, rather than show the patient a wrong one.
+
+    A dosage only counts if it follows the medication's name and precedes the next
+    prescribed name, so doses swapped between two medications fail. Digit boundaries stop
+    "500mg" matching inside "1500mg", "2.5mg" or "500.5mg", and alphanumeric boundaries on
+    names stop "Vitamin B1" matching inside "Vitamin B12". Case and whitespace are ignored.
+    (Patterns are built from re.escape'd characters joined by `\\s*`, with no nested
+    quantifiers, so doctor-entered names and doses cannot cause catastrophic backtracking.)"""
+    name_res = [re.compile(r"(?<![A-Za-z0-9])" + _flexible(m.name) + r"(?![A-Za-z0-9])", re.I)
+                for m in medications]
+    dose_res = [re.compile(r"(?<!\d)(?<!\d[.,])" + _flexible(m.dosage) + r"(?!\d|[.,]\d)", re.I)
+                for m in medications]
+
+    occurrences = sorted(
+        (match.start(), match.end(), index)
+        for index, name_re in enumerate(name_res)
+        for match in name_re.finditer(schedule)
+    )
+
+    mismatched = []
+    for index, med in enumerate(medications):
+        matched = False
+        for start, end, found in occurrences:
+            if found != index:
+                continue
+            segment_end = next((s for s, _, _ in occurrences if s >= end), len(schedule))
+            if dose_res[index].search(schedule, end, segment_end):
+                matched = True
+                break
+        if not matched:
+            mismatched.append(med.name)
+
+    if mismatched:
+        return "AI medication schedule does not match the prescription (mismatched: " + ", ".join(mismatched) + ")."
+    return None
 
 
 class AIService:
@@ -199,6 +246,7 @@ class AIService:
                 medications=medications,
                 prescription_instructions=instructions,
             ),
+            verify=lambda output: _schedule_mismatch(output.medication_schedule, medications),
         )
         return AISummaryResponse.model_validate(summary)
 
@@ -214,7 +262,12 @@ class AIService:
         return AISummaryResponse.model_validate(summary)
 
     # --- Shared generation + graceful-failure pipeline ---
-    def _run_generation(self, db: Session, appointment_id: str, summary_type: AISummaryType, output_model, call):
+    def _run_generation(
+        self, db: Session, appointment_id: str, summary_type: AISummaryType, output_model, call,
+        verify: Optional[Callable[[Any], Optional[str]]] = None,
+    ):
+        """`verify`, when given, receives the schema-valid output and returns an error
+        message if its content is unacceptable (recorded as FAILED), else None."""
         provider = self._provider()
         try:
             raw_output = call(provider)
@@ -235,6 +288,13 @@ class AIService:
             return clinical_repository.create_ai_summary(
                 db, appointment_id, summary_type, AISummaryStatus.FAILED,
                 error_message=f"Invalid AI response schema: {exc}"
+            )
+
+        problem = verify(validated) if verify else None
+        if problem:
+            return clinical_repository.create_ai_summary(
+                db, appointment_id, summary_type, AISummaryStatus.FAILED,
+                error_message=problem
             )
 
         return clinical_repository.create_ai_summary(

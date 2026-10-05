@@ -21,4 +21,4 @@ This document maps every requirement from `AGENT_SPEC.md` to its planned backend
 | **REQ-15** | Google Calendar Integration | `calendar`, `providers` | `CalendarService` + `GoogleCalendarProvider` | `tests/test_calendar.py::test_calendar_sync_and_retry` |
 | **REQ-16** | Background Job Processing & Retries | `workers` | `NotificationWorker`, `HoldExpiryWorker` | `tests/test_notifications.py::test_worker_job_processing` |
 | **REQ-17** | Graceful LLM Failure | `ai`, `providers` | Fallback error state in `AISummary` | `tests/test_ai.py::test_llm_failure_graceful_handling` |
-| **REQ-18** | DEMO_MODE Configuration | `config`, `providers` | `MockAIProvider`, `MockEmailProvider`, `MockCalendarProvider` | `tests/test_health.py::test_demo_mode_switch` |
+| **REQ-18** | DEMO_MODE Configuration | `config`, `providers` | `MockAIProvider`, `MockEmailProvider`, `MockCalendarProvider` | `tests/test_config.py::test_provider_factories_respect_per_integration_switches`, `tests/test_health.py::test_health_reports_each_integrations_effective_provider` |
