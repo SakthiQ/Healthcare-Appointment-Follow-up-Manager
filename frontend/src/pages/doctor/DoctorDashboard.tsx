@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useAsync } from '../../lib/useAsync';
-import { formatDate, formatDateTime, parseServerDate } from '../../lib/format';
+import { formatDate, formatDateTime } from '../../lib/format';
 import { Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from '../../components/ui';
 
 const ACTIVE = new Set(['CONFIRMED', 'RESCHEDULED']);
@@ -14,7 +14,7 @@ export default function DoctorDashboard() {
   const appointments = data ?? [];
   const now = new Date();
   const upcoming = appointments
-    .filter((a) => ACTIVE.has(a.status) && parseServerDate(a.start_time) >= now)
+    .filter((a) => ACTIVE.has(a.status) && new Date(a.start_time) >= now)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   // Today's count includes appointments that have already started or finished today.

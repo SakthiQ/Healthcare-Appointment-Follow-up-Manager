@@ -1,7 +1,8 @@
 import enum
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Enum as SQLEnum, UniqueConstraint
+from app.core.datetime_utils import UTCDateTime
+from sqlalchemy import Column, String, Text, Integer, ForeignKey, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -34,10 +35,10 @@ class CalendarEvent(Base):
     # as the same event instead of producing a duplicate (see CalendarService).
     idempotency_key = Column(String(255), nullable=False, default=lambda: uuid.uuid4().hex)
     attempts = Column(Integer, nullable=False, default=0)
-    next_retry_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    next_retry_at = Column(UTCDateTime(), nullable=True, index=True)
     last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         # One calendar event row per appointment per side (patient / doctor).

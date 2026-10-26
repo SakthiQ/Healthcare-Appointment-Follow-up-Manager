@@ -174,7 +174,7 @@ frontend/
 │   │   ├── Layout.tsx          # topbar + role-based nav
 │   │   └── ui.tsx              # Spinner, ErrorBanner, Card, Field, ConfirmDialog, etc.
 │   ├── lib/
-│   │   ├── format.ts           # UTC-safe date formatting, parseServerDate()
+│   │   ├── format.ts           # UTC date formatting helpers
 │   │   └── useAsync.ts         # loading/error/reload hook used by every data-driven page
 │   ├── pages/
 │   │   ├── Login.tsx, Register.tsx

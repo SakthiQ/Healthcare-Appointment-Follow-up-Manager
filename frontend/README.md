@@ -70,10 +70,9 @@ working hours, add/remove leave dates, review conflicted appointments.
   `error_code`; `ErrorBanner` renders that text rather than a generic message.
   FastAPI 422 validation arrays are flattened into readable field messages.
 - **Times are UTC.** The backend generates and stores slots in UTC, so the UI
-  renders and labels UTC to stay consistent. `parseServerDate()` treats a
-  timestamp with no timezone designator as UTC — values read back from the
-  database serialise without one, and parsing those as local time silently
-  shifts every appointment by the viewer's offset.
+  renders and labels UTC to stay consistent. Every timestamp the API returns
+  carries a UTC offset (the backend's `UTCDateTime` column type guarantees it),
+  so plain `new Date(iso)` parses it correctly.
 - **Loading and confirmation states** are explicit: spinners while fetching,
   disabled buttons with progress labels while submitting, and a confirmation
   dialog before destructive actions (cancel appointment, remove leave).

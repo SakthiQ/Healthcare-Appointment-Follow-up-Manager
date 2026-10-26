@@ -242,3 +242,31 @@ def test_expired_hold_cannot_be_confirmed_into_appointment(client, db_session):
         "end_time": end_dt.isoformat()
     }, headers=headers2)
     assert r_appt2.status_code == 201
+
+
+def test_db_sourced_timestamps_serialise_with_utc_designator(client):
+    """Regression: GET responses built from DB rows must carry a UTC offset, so
+    clients don't parse "2026-08-31T10:00:00" as local time."""
+    doc, _, headers1, _ = setup_appointment_test_env(client)
+    # A week later than the other tests, so the shared test DB has no clash.
+    next_monday = get_next_monday() + timedelta(days=7)
+    start_dt = datetime.combine(next_monday, time(10, 0), tzinfo=timezone.utc)
+    end_dt = datetime.combine(next_monday, time(10, 30), tzinfo=timezone.utc)
+
+    hold = client.post("/api/v1/slots/holds", json={
+        "doctor_id": doc["id"],
+        "start_time": start_dt.isoformat(),
+        "end_time": end_dt.isoformat()
+    }, headers=headers1).json()
+    appt = client.post("/api/v1/appointments", json={
+        "doctor_id": doc["id"],
+        "hold_id": hold["id"]
+    }, headers=headers1).json()
+
+    r_get = client.get(f"/api/v1/appointments/{appt['id']}", headers=headers1)
+    assert r_get.status_code == 200
+    data = r_get.json()
+    for field in ("start_time", "end_time", "created_at"):
+        parsed = datetime.fromisoformat(data[field].replace("Z", "+00:00"))
+        assert parsed.utcoffset() == timedelta(0), f"{field}={data[field]!r} lacks a UTC offset"
+    assert datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) == start_dt

@@ -263,10 +263,6 @@ after every phase. Headlines:
   `ADMIN`, with no authentication. Now restricted to PATIENT-only by default
   (`ALLOW_PRIVILEGED_SELF_REGISTRATION`, see above). Regression test:
   `tests/test_auth.py::test_privileged_self_registration_rejected_by_default`.
-- **Backend datetimes read back from the database are timezone-naive** (values
-  generated in-memory carry a UTC offset; values round-tripped through the DB don't).
-  The frontend works around this (`parseServerDate()`); the correct fix is backend-side
-  and hasn't been made, to avoid touching code covered by 105 passing tests this late.
 - **The 100-thread concurrency test doesn't prove true multi-connection safety** —
   SQLite forces serialization in-process. The independent, dialect-agnostic proof is the
   database unique-index test, which has also never run against live PostgreSQL.

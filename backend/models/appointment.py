@@ -1,7 +1,8 @@
 import enum
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum as SQLEnum, Index, text
+from app.core.datetime_utils import UTCDateTime
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum as SQLEnum, Index, text
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -26,11 +27,11 @@ class Appointment(Base):
     # id is needed for appointments.
     doctor_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     doctor_profile_id = Column(String(36), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=True, index=True)
-    start_time = Column(DateTime(timezone=True), nullable=False, index=True)
-    end_time = Column(DateTime(timezone=True), nullable=False)
+    start_time = Column(UTCDateTime(), nullable=False, index=True)
+    end_time = Column(UTCDateTime(), nullable=False)
     status = Column(SQLEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.CONFIRMED, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_doctor_start_time_status', 'doctor_id', 'start_time', 'status'),
@@ -85,11 +86,11 @@ class AppointmentHold(Base):
     # (users.id). Do not mix the two across models.
     doctor_id = Column(String(36), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False, index=True)
     patient_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    start_time = Column(DateTime(timezone=True), nullable=False, index=True)
-    end_time = Column(DateTime(timezone=True), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    start_time = Column(UTCDateTime(), nullable=False, index=True)
+    end_time = Column(UTCDateTime(), nullable=False)
+    expires_at = Column(UTCDateTime(), nullable=False, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     doctor = relationship("Doctor", back_populates="holds")

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Date, Time, ForeignKey, UniqueConstraint
+from app.core.datetime_utils import UTCDateTime
+from sqlalchemy import Column, String, Integer, Boolean, Date, Time, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -13,8 +14,8 @@ class Doctor(Base):
     specialization = Column(String(255), nullable=False, index=True)
     slot_duration_minutes = Column(Integer, nullable=False, default=30)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user = relationship("User", back_populates="doctor_profile")
@@ -55,7 +56,7 @@ class DoctorLeave(Base):
     doctor_id = Column(String(36), ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False, index=True)
     leave_date = Column(Date, nullable=False, index=True)
     reason = Column(String(500), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint('doctor_id', 'leave_date', name='uq_doctor_leave_date'),

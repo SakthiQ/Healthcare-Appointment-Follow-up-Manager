@@ -28,31 +28,16 @@ const DATE_ONLY: Intl.DateTimeFormatOptions = {
   day: '2-digit',
 };
 
-/**
- * Parse a timestamp coming from the API.
- *
- * The backend stores everything in UTC, but values read back out of the
- * database serialise WITHOUT a timezone designator (e.g. "2026-08-31T10:00:00"),
- * while values built in memory carry one ("...+00:00"). JavaScript interprets
- * the former as *local* time, which silently shifts every DB-sourced timestamp
- * by the viewer's UTC offset — making holds look expired and appointments look
- * hours off. Treat a missing designator as UTC, which is what it actually is.
- */
-export function parseServerDate(iso: string): Date {
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  return new Date(hasZone ? iso : `${iso}Z`);
-}
-
 export function formatDateTime(iso: string): string {
-  return `${parseServerDate(iso).toLocaleString('en-GB', DATE_TIME)} UTC`;
+  return `${new Date(iso).toLocaleString('en-GB', DATE_TIME)} UTC`;
 }
 
 export function formatTime(iso: string): string {
-  return parseServerDate(iso).toLocaleString('en-GB', TIME_ONLY);
+  return new Date(iso).toLocaleString('en-GB', TIME_ONLY);
 }
 
 export function formatDate(iso: string): string {
-  return parseServerDate(iso).toLocaleString('en-GB', DATE_ONLY);
+  return new Date(iso).toLocaleString('en-GB', DATE_ONLY);
 }
 
 /** YYYY-MM-DD in the viewer's own calendar, for <input type="date"> and the slots endpoint. */
@@ -72,7 +57,7 @@ export function bookableSlots<T extends { is_available: boolean; start_time: str
   slots: T[],
   now: number,
 ): T[] {
-  return slots.filter((s) => s.is_available && parseServerDate(s.start_time).getTime() > now);
+  return slots.filter((s) => s.is_available && new Date(s.start_time).getTime() > now);
 }
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -103,7 +88,7 @@ export function urgencyTone(urgency: string): string {
 
 /** Seconds remaining until an ISO timestamp, floored at 0. */
 export function secondsUntil(iso: string): number {
-  return Math.max(0, Math.floor((parseServerDate(iso).getTime() - Date.now()) / 1000));
+  return Math.max(0, Math.floor((new Date(iso).getTime() - Date.now()) / 1000));
 }
 
 export function formatCountdown(totalSeconds: number): string {

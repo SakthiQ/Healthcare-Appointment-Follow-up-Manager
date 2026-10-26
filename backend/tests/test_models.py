@@ -312,3 +312,42 @@ def test_notification_and_calendar_models(db_session):
     assert job.status == NotificationStatus.PENDING
     assert cal_event.external_event_id == "gcal_event_123456"
     assert cal_event.status == CalendarSyncStatus.SYNCED
+
+
+def test_datetimes_round_trip_through_db_as_utc_aware(db_session):
+    """Regression: values read back from the DB used to come out timezone-naive
+    (SQLite drops the offset), so they serialised without a zone designator and
+    the frontend misread them as local time. Every DateTime column must come
+    back aware and in UTC — including values written with a non-UTC offset."""
+    patient = User(email="tz_pat@example.com", password_hash="p", full_name="Tz Pat", role=UserRole.PATIENT)
+    doc_user = User(email="tz_doc@example.com", password_hash="d", full_name="Tz Doc", role=UserRole.DOCTOR)
+    db_session.add_all([patient, doc_user])
+    db_session.commit()
+
+    doctor = Doctor(user_id=doc_user.id, specialization="Neurology")
+    db_session.add(doctor)
+    db_session.commit()
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    start_ist = datetime(2030, 3, 4, 15, 30, tzinfo=ist)  # == 10:00 UTC
+    appt = Appointment(
+        patient_id=patient.id,
+        doctor_id=doc_user.id,
+        doctor_profile_id=doctor.id,
+        start_time=start_ist,
+        end_time=start_ist + timedelta(minutes=30),
+        status=AppointmentStatus.CONFIRMED
+    )
+    db_session.add(appt)
+    db_session.commit()
+    appt_id = appt.id
+
+    # Force a genuine re-load from the database rather than the identity map.
+    db_session.expire_all()
+    reloaded = db_session.get(Appointment, appt_id)
+
+    for value in (reloaded.start_time, reloaded.end_time, reloaded.created_at, reloaded.updated_at):
+        assert value.tzinfo is not None
+        assert value.utcoffset() == timedelta(0)
+    assert reloaded.start_time == datetime(2030, 3, 4, 10, 0, tzinfo=timezone.utc)
+    assert reloaded.patient.created_at.utcoffset() == timedelta(0)

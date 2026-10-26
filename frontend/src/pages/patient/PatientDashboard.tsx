@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useAsync } from '../../lib/useAsync';
-import { formatDateTime, parseServerDate } from '../../lib/format';
+import { formatDateTime } from '../../lib/format';
 import { Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from '../../components/ui';
 
 const ACTIVE = new Set(['CONFIRMED', 'RESCHEDULED', 'HELD']);
@@ -13,7 +13,7 @@ export default function PatientDashboard() {
 
   const appointments = data ?? [];
   const upcoming = appointments
-    .filter((a) => ACTIVE.has(a.status) && parseServerDate(a.start_time) >= new Date())
+    .filter((a) => ACTIVE.has(a.status) && new Date(a.start_time) >= new Date())
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
   const conflicted = appointments.filter((a) => a.status === 'CONFLICTED');
 

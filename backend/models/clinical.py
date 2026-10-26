@@ -1,7 +1,8 @@
 import enum
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Enum as SQLEnum, JSON
+from app.core.datetime_utils import UTCDateTime
+from sqlalchemy import Column, String, Text, Integer, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -23,7 +24,7 @@ class SymptomReport(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     appointment_id = Column(String(36), ForeignKey("appointments.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     symptoms = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     appointment = relationship("Appointment", back_populates="symptom_report")
@@ -41,7 +42,7 @@ class AISummary(Base):
     status = Column(SQLEnum(AISummaryStatus), nullable=False, default=AISummaryStatus.PENDING, index=True)
     payload = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     appointment = relationship("Appointment", back_populates="ai_summaries")
@@ -56,7 +57,7 @@ class Consultation(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     appointment_id = Column(String(36), ForeignKey("appointments.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     notes = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     appointment = relationship("Appointment", back_populates="consultation")
@@ -72,7 +73,7 @@ class Prescription(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     consultation_id = Column(String(36), ForeignKey("consultations.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     instructions = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     consultation = relationship("Consultation", back_populates="prescription")
@@ -91,7 +92,7 @@ class Medication(Base):
     dosage = Column(String(255), nullable=False)
     frequency = Column(String(255), nullable=False)
     duration_days = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     prescription = relationship("Prescription", back_populates="medications")
