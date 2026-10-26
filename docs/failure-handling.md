@@ -88,4 +88,4 @@ concurrent requests, exactly 1 succeeds).
 - **A provider that is down for longer than `MAX_ATTEMPTS × backoff`.** The job becomes
   `FAILED` (terminal) and is not automatically retried further. An operator would need to
   reset `status`/`attempts` manually (no admin endpoint for this exists — recorded as a
-  known limitation, see `second-brain/05_KNOWN_ISSUES.md`).
+  known limitation, see Known limitations in the root `README.md`).

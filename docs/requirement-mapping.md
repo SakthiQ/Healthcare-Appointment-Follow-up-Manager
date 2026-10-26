@@ -1,17 +1,16 @@
 # Requirement Mapping (Phase 13 — Evidence-Based)
 
-This supersedes `docs/requirement-map.md`, which was written at Phase 0 as a *plan*
-before any code existed (several endpoint paths and test names in it never matched what
-was actually built). Every row below cites a real file, a real API path, and a real test
-that exists in the repository today — verified by re-running the full suite
-(104/104 passing, see `second-brain/04_TEST_STATUS.md`) immediately before writing this.
+This replaces the Phase 0 planning draft (`docs/requirement-map.md`, since removed),
+whose endpoint paths and test names never matched what was actually built. Every row
+below cites a real file, a real API path, and a real test that exists in the repository
+today. The full suite (131 tests) passes.
 
 Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) · ❌ Not implemented
 
 | # | Requirement (from AGENT_SPEC.md) | Module | API / Mechanism | Test evidence | Status |
 |---|---|---|---|---|---|
-| 1 | Separate patient, doctor, admin portals | `frontend/src/pages/{patient,doctor,admin}` | React app, role-based nav (`Layout.tsx`) + route guard (`ProtectedRoute.tsx`) | Manual browser verification, Phase 11 (see `second-brain/04_TEST_STATUS.md`) | ⚠️ |
-| 2 | Patient registration & login | `services/auth_service.py` | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | `test_auth.py` (9 tests) | ✅ |
+| 1 | Separate patient, doctor, admin portals | `frontend/src/pages/{patient,doctor,admin}` | React app, role-based nav (`Layout.tsx`) + route guard (`ProtectedRoute.tsx`) | Manual browser verification, Phase 11 | ⚠️ |
+| 2 | Patient registration & login | `services/auth_service.py` | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | `test_auth.py` (11 tests) | ✅ |
 | 3 | Doctor search by specialization | `services/doctor_service.py` | `GET /api/v1/doctors?specialization=` | `test_doctors.py::test_specialization_search_and_inactive_doctor_behavior` | ✅ |
 | 4 | Admin-managed doctor profiles | `services/doctor_service.py` | `POST/PUT/PATCH /api/v1/admin/doctors...` | `test_doctors.py::test_admin_doctor_creation_and_permissions`, `test_admin_doctor_update` | ✅ |
 | 5 | Doctor specialization | `models/doctor.py::Doctor.specialization` | part of doctor create/update | `test_doctors.py` | ✅ |
@@ -46,7 +45,7 @@ Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) �
   access (`StaticPool` + an explicit lock in the test itself), so it does not prove true
   concurrent-write safety on its own. The independent, dialect-agnostic proof is the DB
   unique index test (#11) inserting two conflicting rows directly. Neither has been run
-  against a live PostgreSQL instance — see `second-brain/05_KNOWN_ISSUES.md`.
+  against a live PostgreSQL instance — see Known limitations in the root `README.md`.
 - **#18 Medication reminders** — reminder *cadence* is one check-in per day of
   `duration_days` (capped at 30), not a parse of the free-text `frequency` field into
   exact per-dose times, since AGENT_SPEC.md doesn't require that and the input data

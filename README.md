@@ -38,7 +38,7 @@ doesn't mean.
 | Auth | JWT (PyJWT) + bcrypt |
 | Background jobs | Two simple polling workers (no broker/queue) |
 | Frontend | React 18 + TypeScript + Vite, React Router, plain `fetch` |
-| Testing | pytest (backend, 105 tests) — see [Running tests](#running-tests) |
+| Testing | pytest (backend, 131 tests) — see [Running tests](#running-tests) |
 
 No microservices, Kafka, Kubernetes, Redis, RAG, or multi-agent frameworks — a modular
 monolith throughout, by design (see `docs/engineering-decisions.md`).
@@ -235,10 +235,7 @@ python -m pytest tests/ -v
 ```
 
 Tests use an isolated in-memory SQLite database (`tests/conftest.py`) — they do not
-touch `DATABASE_URL`. **105 tests, 105 passing**, verified in a clean environment
-(fresh-migrated DB, full verbose run) immediately before this document was written —
-see `second-brain/04_TEST_STATUS.md` for the exact per-suite breakdown and the command
-used. Frontend: `cd frontend && npm run typecheck && npm run build`.
+touch `DATABASE_URL`. **131 tests, 131 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
 
 ## Deployment
 
@@ -250,8 +247,7 @@ every API call returns "Not found."
 
 ## Known limitations
 
-The full list with reasoning is in `second-brain/05_KNOWN_ISSUES.md`, kept up to date
-after every phase. Headlines:
+Each entry gives the reasoning behind it.
 
 - **`RealAIProvider`, `RealEmailProvider`, and `GoogleCalendarProvider` have never been
   exercised against a real LLM, SMTP server, or Google account** — no credentials exist
@@ -270,6 +266,9 @@ after every phase. Headlines:
   between tests when a test performs multiple commits, so committed rows can leak
   across tests. Attempted fix (SQLAlchemy SAVEPOINT pattern) broke the concurrency test
   and was reverted; affected tests were rewritten to use scoped/delta assertions instead.
+- **No way to retry a `FAILED` notification job** — once a job exhausts its retries
+  it stays `FAILED`; an operator must reset `status`/`attempts` in the database by hand
+  (no admin endpoint exists). See `docs/failure-handling.md`.
 - **Doctor-leave conflicts don't sync to the calendar** — Phase 10's stated scope was
   create/update/delete on booking/reschedule/cancellation only.
 - No automated frontend test suite (not required by the phase spec; verification was
@@ -279,7 +278,7 @@ after every phase. Headlines:
 
 All 13 phases in `AGENT_PHASES.md` are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 105/105
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 131/131
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app

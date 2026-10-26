@@ -79,7 +79,7 @@ def assert_events_exist_for(db, provider, appointment_id, expected=2):
     Deliberately scoped rather than asserting on the provider's total size:
     the workers process every due row in the shared test database, so other
     tests' rows legitimately land in the same provider (see
-    second-brain/05_KNOWN_ISSUES.md on test-DB leakage).
+    the test-DB leakage entry under Known limitations in README.md).
     """
     ids = {r.external_event_id for r in calendar_rows_for(db, appointment_id)}
     assert len(ids) == expected
