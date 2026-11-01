@@ -7,10 +7,12 @@ from pydantic import ValidationError as PydanticValidationError
 from app.exceptions import NotFoundError, ForbiddenError, ValidationError, ConflictError
 from models.user import User, UserRole
 from models.appointment import AppointmentStatus
-from models.clinical import AISummaryType, AISummaryStatus
+from models.clinical import AISummary, AISummaryType, AISummaryStatus
+from models.notification import NotificationType
 from repositories.appointment_repository import appointment_repository
 from repositories.clinical_repository import clinical_repository
 from providers.ai_provider import AIProvider, AIProviderError, PrescribedMedication, get_ai_provider
+from services.notification_service import notification_service
 from services.reminder_service import reminder_service
 from schemas.ai import (
     PreVisitAIOutput,
@@ -41,6 +43,15 @@ def _authorize_appointment_participant(appointment, user: User) -> None:
     if user.role == UserRole.DOCTOR and appointment.doctor_id == user.id:
         return
     raise ForbiddenError("Not authorized to access this appointment.")
+
+
+def _summary_response(summary: AISummary, user: User) -> AISummaryResponse:
+    """A failure's error_message is technical detail for clinic staff (it stays on
+    the row either way); patients just see that the summary failed."""
+    response = AISummaryResponse.model_validate(summary)
+    if user.role == UserRole.PATIENT:
+        response.error_message = None
+    return response
 
 
 def _flexible(text: str) -> str:
@@ -134,7 +145,7 @@ class AIService:
             output_model=PreVisitAIOutput,
             call=lambda provider: provider.generate_pre_visit_summary(report.symptoms),
         )
-        return AISummaryResponse.model_validate(summary)
+        return _summary_response(summary, patient)
 
     def get_pre_visit_summary(self, db: Session, appointment_id: str, user: User) -> AISummaryResponse:
         appointment = appointment_repository.get_by_id(db, appointment_id)
@@ -145,7 +156,7 @@ class AIService:
         summary = clinical_repository.get_latest_ai_summary(db, appointment_id, AISummaryType.PRE_VISIT)
         if not summary:
             raise NotFoundError("No pre-visit summary has been generated for this appointment yet.")
-        return AISummaryResponse.model_validate(summary)
+        return _summary_response(summary, user)
 
     # --- Consultation + Prescription (input to post-visit AI) ---
     def submit_consultation(
@@ -171,29 +182,45 @@ class AIService:
         if existing:
             raise ConflictError("A consultation has already been submitted for this appointment.")
 
+        # The consultation is what marks the visit as having taken place; this
+        # status change commits together with the consultation below.
+        appointment_repository.update_status_no_commit(db, appointment, AppointmentStatus.COMPLETED)
         consultation = clinical_repository.create_consultation_with_prescription(
             db, appointment_id, notes, prescription_instructions, medications
         )
+        patient_id = appointment.patient_id
         medication_items = consultation.prescription.medications if consultation.prescription else []
-
-        if medication_items:
-            try:
-                reminder_service.schedule_medication_reminders(
-                    db, appointment_id=appointment_id, patient_id=appointment.patient_id,
-                    medications=medication_items
-                )
-            except Exception:
-                # Medication reminders are best-effort — consultation/prescription
-                # submission must not fail because reminder scheduling did.
-                logger.exception("Failed to schedule medication reminders for appointment %s", appointment_id)
-
-        return ConsultationResponse(
+        response = ConsultationResponse(
             id=consultation.id,
             appointment_id=consultation.appointment_id,
             notes=consultation.notes,
             created_at=consultation.created_at,
             medications=[MedicationResponse.model_validate(m) for m in medication_items],
         )
+
+        # Both steps below are best-effort — the consultation/prescription is
+        # already committed and must not fail because either of them did. Rollback
+        # clears the session, which a failed flush would otherwise leave unusable.
+        if medication_items:
+            try:
+                reminder_service.schedule_medication_reminders(
+                    db, appointment_id=appointment_id, patient_id=patient_id,
+                    medications=medication_items
+                )
+            except Exception:
+                db.rollback()
+                logger.exception("Failed to schedule medication reminders for appointment %s", appointment_id)
+
+        try:
+            notification_service.supersede_pending_notifications(
+                db, appointment_id, NotificationType.APPOINTMENT_REMINDER,
+                reason="Superseded: consultation completed.",
+            )
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to retire appointment reminders for appointment %s", appointment_id)
+
+        return response
 
     def get_consultation(self, db: Session, appointment_id: str, user: User) -> ConsultationResponse:
         appointment = appointment_repository.get_by_id(db, appointment_id)
@@ -259,7 +286,7 @@ class AIService:
         summary = clinical_repository.get_latest_ai_summary(db, appointment_id, AISummaryType.POST_VISIT)
         if not summary:
             raise NotFoundError("No post-visit summary has been generated for this appointment yet.")
-        return AISummaryResponse.model_validate(summary)
+        return _summary_response(summary, user)
 
     # --- Shared generation + graceful-failure pipeline ---
     def _run_generation(

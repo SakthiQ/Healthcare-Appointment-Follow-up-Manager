@@ -2,6 +2,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 import threading
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 from app.exceptions import NotFoundError, ConflictError, ValidationError, ForbiddenError
 from app.core.datetime_utils import ensure_utc
@@ -30,6 +31,17 @@ logger = logging.getLogger(__name__)
 _booking_lock = threading.Lock()
 
 
+def _abandon_failed_side_effect(db: Session, appt: Appointment, description: str) -> None:
+    """Call from the except block of a post-commit side effect. A failed flush
+    leaves the session unusable until rollback, which would turn the side
+    effect's failure into a failed request for a change that already committed.
+    Rollback also expires `appt`, so its id is read from the identity map, which
+    needs no database round trip."""
+    appointment_id = inspect(appt).identity[0]
+    db.rollback()
+    logger.exception("Failed to %s for appointment %s", description, appointment_id)
+
+
 class AppointmentService:
     def create_appointment(
         self, db: Session, patient_id: str, req: AppointmentCreateRequest
@@ -46,6 +58,11 @@ class AppointmentService:
             doctor = doctor_repository.get_by_id(db, doctor_profile_id)
             if not doctor:
                 raise NotFoundError("Doctor profile not found.")
+
+            # The schedule may have changed since the hold was taken: an admin
+            # can add leave or deactivate the doctor while a hold is active.
+            if not slot_service.validate_slot_boundary(db, doctor_profile_id, start_time, end_time):
+                raise ConflictError("This slot is no longer available. Please select another slot.")
 
             # Acquire the same app-level lock as the direct-booking path so
             # the hold-confirmation critical section (overlap check -> hold
@@ -73,9 +90,10 @@ class AppointmentService:
                     end_time=end_time,
                     status=AppointmentStatus.CONFIRMED
                 )
+            response = AppointmentResponse.model_validate(appt)
             self._safe_queue_booking_notifications(db, appt)
             self._safe_sync_calendar(db, appt, "created")
-            return AppointmentResponse.model_validate(appt)
+            return response
 
         # 2. Option B: Direct slot booking
         if not req.start_time or not req.end_time:
@@ -123,9 +141,10 @@ class AppointmentService:
                 end_time=end_time,
                 status=AppointmentStatus.CONFIRMED
             )
+        response = AppointmentResponse.model_validate(appt)
         self._safe_queue_booking_notifications(db, appt)
         self._safe_sync_calendar(db, appt, "created")
-        return AppointmentResponse.model_validate(appt)
+        return response
 
     def _safe_queue_booking_notifications(self, db: Session, appt: Appointment) -> None:
         """Queue BOOKING_CONFIRMATION for patient+doctor and an
@@ -143,7 +162,7 @@ class AppointmentService:
                 )
             reminder_service.schedule_appointment_reminder(db, appt)
         except Exception:
-            logger.exception("Failed to queue booking notifications for appointment %s", appt.id)
+            _abandon_failed_side_effect(db, appt, "queue booking notifications")
 
     def _safe_sync_calendar(self, db: Session, appt: Appointment, operation: str) -> None:
         """Arm calendar work for an already-committed appointment. Runs strictly
@@ -159,7 +178,7 @@ class AppointmentService:
             elif operation == "cancelled":
                 calendar_service.sync_appointment_cancelled(db, appt)
         except Exception:
-            logger.exception("Failed to arm calendar %s sync for appointment %s", operation, appt.id)
+            _abandon_failed_side_effect(db, appt, f"arm calendar {operation} sync")
 
     def _safe_queue_reschedule_notifications(self, db: Session, appt: Appointment) -> None:
         """Announce the new time to both parties and re-arm the reminder.
@@ -183,7 +202,7 @@ class AppointmentService:
                 )
             reminder_service.schedule_appointment_reminder(db, appt)
         except Exception:
-            logger.exception("Failed to queue reschedule notifications for appointment %s", appt.id)
+            _abandon_failed_side_effect(db, appt, "queue reschedule notifications")
 
     def _safe_queue_cancellation_notifications(self, db: Session, appt: Appointment) -> None:
         try:
@@ -199,7 +218,7 @@ class AppointmentService:
                     payload=payload,
                 )
         except Exception:
-            logger.exception("Failed to queue cancellation notifications for appointment %s", appt.id)
+            _abandon_failed_side_effect(db, appt, "queue cancellation notifications")
 
     def reschedule_appointment(
         self, db: Session, appointment_id: str, user: User, req: AppointmentRescheduleRequest
@@ -250,9 +269,10 @@ class AppointmentService:
         updated_appt = appointment_repository.reschedule(
             db=db, appointment=appt, new_start_time=new_start_time, new_end_time=new_end_time
         )
+        response = AppointmentResponse.model_validate(updated_appt)
         self._safe_queue_reschedule_notifications(db, updated_appt)
         self._safe_sync_calendar(db, updated_appt, "rescheduled")
-        return AppointmentResponse.model_validate(updated_appt)
+        return response
 
     def cancel_appointment(
         self, db: Session, appointment_id: str, user: User, req: Optional[AppointmentCancelRequest] = None
@@ -273,9 +293,10 @@ class AppointmentService:
             raise ValidationError("Cannot cancel a completed appointment.")
 
         cancelled_appt = appointment_repository.update_status(db, appt, AppointmentStatus.CANCELLED)
+        response = AppointmentResponse.model_validate(cancelled_appt)
         self._safe_queue_cancellation_notifications(db, cancelled_appt)
         self._safe_sync_calendar(db, cancelled_appt, "cancelled")
-        return AppointmentResponse.model_validate(cancelled_appt)
+        return response
 
     def get_appointment(self, db: Session, appointment_id: str, user: User) -> AppointmentResponse:
         appt = appointment_repository.get_by_id(db, appointment_id)

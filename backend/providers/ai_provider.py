@@ -6,12 +6,15 @@ AGENT_SPEC.md so the documented contract and the implementation never drift
 apart. See docs/ai-design.md for the full write-up.
 """
 import abc
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Exact prompt templates from AGENT_SPEC.md's "LLM Usage Guidance".
 PRE_VISIT_PROMPT_TEMPLATE = (
@@ -204,7 +207,9 @@ class RealAIProvider(AIProvider):
         if response.status_code >= 500:
             raise AIProviderUnavailableError(f"AI provider returned server error {response.status_code}")
         if response.status_code >= 400:
-            raise AIProviderUnavailableError(f"AI provider returned error {response.status_code}: {response.text}")
+            # The body goes to the logs only: this message is stored and shown in the UI.
+            logger.warning("AI provider returned error %s: %s", response.status_code, response.text)
+            raise AIProviderUnavailableError(f"AI provider returned error {response.status_code}")
 
         try:
             body = response.json()

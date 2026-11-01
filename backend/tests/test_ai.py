@@ -156,7 +156,7 @@ def test_pre_visit_summary_unauthorized_patient_cannot_view(client):
 # ---------------------------------------------------------------------------
 
 def test_pre_visit_invalid_json_from_provider_marks_failed_and_appointment_stays_valid(client):
-    appt, _, headers1, _, _ = setup_ai_test_env(client)
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
     client.post(f"/api/v1/appointments/{appt['id']}/symptom-report", json={
         "symptoms": "Sore throat."
     }, headers=headers1)
@@ -171,7 +171,12 @@ def test_pre_visit_invalid_json_from_provider_marks_failed_and_appointment_stays
     data = r.json()
     assert data["status"] == AISummaryStatus.FAILED.value
     assert data["payload"] is None
-    assert "not valid JSON" in data["error_message"]
+    # The patient sees that it failed; the technical reason is for clinic staff.
+    assert data["error_message"] is None
+    r_patient = client.get(f"/api/v1/appointments/{appt['id']}/ai/pre-visit-summary", headers=headers1)
+    assert r_patient.json()["error_message"] is None
+    r_doctor = client.get(f"/api/v1/appointments/{appt['id']}/ai/pre-visit-summary", headers=doc_headers)
+    assert "not valid JSON" in r_doctor.json()["error_message"]
 
     # Appointment must remain valid/untouched by the AI failure.
     r_appt = client.get(f"/api/v1/appointments/{appt['id']}", headers=headers1)
@@ -180,7 +185,7 @@ def test_pre_visit_invalid_json_from_provider_marks_failed_and_appointment_stays
 
 
 def test_pre_visit_invalid_urgency_value_marks_failed(client):
-    appt, _, headers1, _, _ = setup_ai_test_env(client)
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
     client.post(f"/api/v1/appointments/{appt['id']}/symptom-report", json={
         "symptoms": "Fever."
     }, headers=headers1)
@@ -199,7 +204,8 @@ def test_pre_visit_invalid_urgency_value_marks_failed(client):
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == AISummaryStatus.FAILED.value
-    assert "Invalid AI response schema" in data["error_message"]
+    r_doctor = client.get(f"/api/v1/appointments/{appt['id']}/ai/pre-visit-summary", headers=doc_headers)
+    assert "Invalid AI response schema" in r_doctor.json()["error_message"]
 
 
 def test_pre_visit_wrong_number_of_questions_marks_failed(client):
@@ -224,7 +230,7 @@ def test_pre_visit_wrong_number_of_questions_marks_failed(client):
 
 
 def test_pre_visit_provider_timeout_marks_failed_and_appointment_stays_valid(client):
-    appt, _, headers1, _, _ = setup_ai_test_env(client)
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
     client.post(f"/api/v1/appointments/{appt['id']}/symptom-report", json={
         "symptoms": "Dizziness."
     }, headers=headers1)
@@ -238,7 +244,8 @@ def test_pre_visit_provider_timeout_marks_failed_and_appointment_stays_valid(cli
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == AISummaryStatus.FAILED.value
-    assert "timed out" in data["error_message"]
+    r_doctor = client.get(f"/api/v1/appointments/{appt['id']}/ai/pre-visit-summary", headers=doc_headers)
+    assert "timed out" in r_doctor.json()["error_message"]
 
     r_appt = client.get(f"/api/v1/appointments/{appt['id']}", headers=headers1)
     assert r_appt.json()["status"] == "CONFIRMED"
@@ -263,6 +270,53 @@ def test_pre_visit_provider_unavailable_marks_failed(client):
 # ---------------------------------------------------------------------------
 # Post-visit: valid output + persistence
 # ---------------------------------------------------------------------------
+
+def test_provider_error_body_is_logged_not_stored(monkeypatch):
+    """A provider's 4xx body can echo request details, and the exception message
+    ends up on the AISummary row and in the UI, so only the status code goes there."""
+    import httpx
+    from providers.ai_provider import RealAIProvider
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(401, text="invalid key sk-secret"))
+    provider = RealAIProvider()
+    provider._api_key = "configured"
+    try:
+        provider.generate_pre_visit_summary("Cough.")
+        assert False, "expected AIProviderUnavailableError"
+    except AIProviderUnavailableError as exc:
+        assert "401" in str(exc)
+        assert "sk-secret" not in str(exc)
+
+
+def test_consultation_completes_appointment_and_retires_its_reminders(client, db_session):
+    from models.notification import NotificationJob, NotificationStatus, NotificationType
+
+    appt, _, headers1, _, doc_headers = setup_ai_test_env(client)
+
+    r_consult = client.post(f"/api/v1/appointments/{appt['id']}/consultation", json={
+        "notes": "Seasonal allergies.",
+        "medications": [{"name": "Cetirizine", "dosage": "10mg", "frequency": "Once daily", "duration_days": 2}],
+    }, headers=doc_headers)
+    assert r_consult.status_code == 201
+
+    r_appt = client.get(f"/api/v1/appointments/{appt['id']}", headers=headers1)
+    assert r_appt.json()["status"] == "COMPLETED"
+
+    # A visit that has taken place can no longer be cancelled.
+    r_cancel = client.post(f"/api/v1/appointments/{appt['id']}/cancel", json={}, headers=headers1)
+    assert r_cancel.status_code == 422
+
+    db_session.expire_all()
+    jobs = db_session.query(NotificationJob).filter(NotificationJob.appointment_id == appt["id"]).all()
+    reminders = [j for j in jobs if j.notification_type == NotificationType.APPOINTMENT_REMINDER]
+    medication = [j for j in jobs if j.notification_type == NotificationType.MEDICATION_REMINDER]
+    assert reminders and all(j.status == NotificationStatus.FAILED for j in reminders)
+    assert len(medication) == 2 and all(j.status == NotificationStatus.PENDING for j in medication)
+
+    # Post-visit summaries are generated after the visit, so COMPLETED must allow them.
+    r_post = client.post(f"/api/v1/appointments/{appt['id']}/ai/post-visit-summary", headers=doc_headers)
+    assert r_post.status_code == 200
+
 
 def test_valid_post_visit_summary_output_and_persistence(client):
     appt, _, headers1, _, doc_headers = setup_ai_test_env(client)

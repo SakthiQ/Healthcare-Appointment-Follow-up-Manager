@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional
 from pydantic import Field, field_validator
 try:
@@ -51,6 +52,9 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str = "no-reply@healthcare-app.local"
 
     NOTIFICATION_MAX_ATTEMPTS: int = 5
+    # A job still PROCESSING after this long had its worker die mid-batch, so it
+    # is put back in the queue. Must comfortably exceed the time to send a batch.
+    NOTIFICATION_PROCESSING_TIMEOUT_MINUTES: int = 30
 
     # Google Calendar / OAuth 2.0 (Phase 10). Only used when calendar demo mode is off
     # (CALENDAR_DEMO_MODE=False or, if unset, DEMO_MODE=False);
@@ -116,6 +120,13 @@ class Settings(BaseSettings):
     @property
     def cors_allowed_origins_list(self) -> list:
         return [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    def is_cors_origin_allowed(self, origin: str) -> bool:
+        """Same rule CORSMiddleware applies to the allow-list and regex."""
+        if origin in self.cors_allowed_origins_list:
+            return True
+        regex = self.CORS_ALLOWED_ORIGIN_REGEX
+        return bool(regex) and re.fullmatch(regex, origin) is not None
 
     try:
         model_config = SettingsConfigDict(

@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings, settings
 from app.core.security import verify_password
+from app.database import get_db
 from app.main import create_app
 from models.user import UserRole
 from scripts.create_admin import CreateAdminError, create_admin
@@ -37,6 +38,28 @@ def test_cors_without_regex_only_allows_listed_origins(monkeypatch):
     monkeypatch.setattr(settings, "CORS_ALLOWED_ORIGIN_REGEX", None)
     client = TestClient(create_app())
     assert "access-control-allow-origin" not in _preflight(client, "https://myapp-git-x.vercel.app").headers
+
+
+def test_unhandled_error_response_keeps_cors_headers(monkeypatch):
+    """Otherwise the browser blocks the 500 and the frontend reports a network failure."""
+    monkeypatch.setattr(settings, "CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.setattr(settings, "CORS_ALLOWED_ORIGIN_REGEX", r"^https://myapp-[a-z0-9-]+\.vercel\.app$")
+
+    def broken_db():
+        raise RuntimeError("database down")
+
+    app = create_app()
+    app.dependency_overrides[get_db] = broken_db
+    client = TestClient(app, raise_server_exceptions=False)
+
+    def error_response(origin):
+        response = client.get("/api/v1/doctors", headers={"Origin": origin})
+        assert response.status_code == 500
+        return response
+
+    assert error_response("https://app.example.com").headers.get("access-control-allow-origin") == "https://app.example.com"
+    assert error_response("https://myapp-git-x.vercel.app").headers.get("access-control-allow-origin") == "https://myapp-git-x.vercel.app"
+    assert "access-control-allow-origin" not in error_response("https://evil.example.com").headers
 
 
 def test_create_admin_script_creates_admin(db_session):

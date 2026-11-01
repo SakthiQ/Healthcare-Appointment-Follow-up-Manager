@@ -57,7 +57,7 @@ flowchart TD
     C --> D[Insert DoctorLeave Record]
     D --> E[Query CONFIRMED Appointments for Doctor on Leave Date]
     E --> F{Any Appointments Found?}
-    F -- Yes --> G[Update Appointment Status to CONFLICTED]
+    F -- Yes --> G[Update Appointment Status to CONFLICTED and Retire Queued Reminders]
     G --> H[Create NotificationJobs for Affected Patients]
     F -- No --> I[Commit Transaction]
     H --> I
@@ -77,7 +77,7 @@ To prevent race conditions while a patient fills out symptom forms:
 1. **Hold Request:** Patient selects a slot; `HoldService` creates an `AppointmentHold` record with `expires_at = now() + 10 minutes`.
 2. **Hold Exclusions:** Slot generation logic ignores slots with active, non-expired holds.
 3. **Automatic Expiry:** Background `HoldExpiryWorker` periodically deactivates expired holds.
-4. **Confirmation Guard:** Attempting to confirm an expired hold rejects the transaction and forces slot re-selection.
+4. **Confirmation Guard:** Attempting to confirm an expired hold rejects the transaction and forces slot re-selection. So does confirming a hold whose slot stopped being valid while it was held, such as when leave was added for that date (409).
 
 ---
 
@@ -102,3 +102,4 @@ flowchart TD
 - **Decoupled Delivery:** Email provider calls happen asynchronously via workers.
 - **Exponential Backoff:** Retries are delayed (e.g., 1 min, 5 min, 15 min).
 - **Idempotency:** Jobs are locked during processing (`PROCESSING` state) to prevent duplicate delivery by parallel worker loops.
+- **Crash Recovery:** A job a dead worker left in `PROCESSING` is requeued after `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES`, counting as an attempt.

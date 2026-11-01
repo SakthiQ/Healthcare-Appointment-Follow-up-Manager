@@ -8,6 +8,8 @@ place all three are compared side by side; each has a deeper per-subsystem write
 (`test_ai.py`, `test_notifications.py`, `test_calendar.py`), plus `test_e2e.py`'s
 `test_e2e_no_external_service_required_for_appointment_integrity`, which runs a full
 book → reschedule → cancel lifecycle with all three providers failing at once.
+`test_failure_recovery.py` covers database errors in the post-commit step and in the
+workers.
 
 ## The shared pattern
 
@@ -37,6 +39,11 @@ synchronously (the user is waiting for a result to review), but the failure hand
 identical — a failed call never raises past the API boundary, it produces a `FAILED`
 `AISummary` row and returns 200.
 
+The post-commit step's `except` rolls the session back and the response is built before
+that step runs, so even a database error there (the session is otherwise unusable until
+rollback) leaves the request successful. The cost is that the notifications or calendar
+rows that step would have queued are lost, with only a log entry; nothing re-creates them.
+
 ## Per-provider comparison
 
 | | **AI** (`ai_service.py`) | **Email** (`notification_service.py`) | **Calendar** (`calendar_service.py`) |
@@ -45,12 +52,12 @@ identical — a failed call never raises past the API boundary, it produces a `F
 | When the provider is called | Synchronously, in the request | `NotificationWorker.run_once()`, polling | `CalendarWorker.run_once()`, polling |
 | Transient exception | `AIProviderTimeoutError`, `AIProviderUnavailableError` | `EmailProviderTransientError`, any unexpected exception | `CalendarProviderTransientError`, timeouts, 5xx, 429 |
 | Permanent exception | — (no separate class; malformed/invalid responses always retry-eligible on the next explicit request) | `EmailProviderPermanentError` (e.g. invalid recipient) | `CalendarProviderPermanentError` (bad credentials, 4xx) |
-| Not-found handling | — | — | `CalendarEventNotFoundError`: recreates on UPDATE (reconciliation), treated as success on DELETE |
+| Not-found handling | — | — | `CalendarEventNotFoundError`: recreates on UPDATE (reconciliation), treated as success on DELETE (Google's 410 Gone on DELETE counts too) |
 | Schema validation | Pydantic `PreVisitAIOutput`/`PostVisitAIOutput`; a syntactically valid but schema-violating response (wrong urgency, wrong question count) fails the same way as a provider error | — | — |
 | Max attempts | N/A (no auto-retry; retry = user calls the endpoint again) | `NOTIFICATION_MAX_ATTEMPTS` (default 5) | `CALENDAR_MAX_ATTEMPTS` (default 5) |
 | Backoff | N/A | `min(2**attempts, 60)` minutes | `min(2**attempts, 60)` minutes |
 | Terminal state | `AISummaryStatus.FAILED`, `error_message` set | `NotificationStatus.FAILED`, `last_error` set | `CalendarSyncStatus.FAILED`, `last_error` set |
-| Duplicate prevention | New row per attempt (audit trail); `GET` resolves to latest by `created_at` | Job created once per (appointment, recipient, type); `get_due_jobs` claims with `SELECT ... FOR UPDATE SKIP LOCKED` on Postgres | DB `UniqueConstraint(appointment_id, recipient_type)` **and** provider-level idempotency key (Google returns 409 on a duplicate id, treated as success) |
+| Duplicate prevention | New row per attempt (audit trail); `GET` resolves to latest by `created_at` | Job created once per (appointment, recipient, type); `get_due_jobs` claims with `SELECT ... FOR UPDATE SKIP LOCKED` on Postgres; a claim abandoned by a dead worker is requeued after `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` (at-least-once) | DB `UniqueConstraint(appointment_id, recipient_type)` **and** provider-level idempotency key (Google returns 409 on a duplicate id, treated as success) |
 | Obsolete-work handling | N/A | Reschedule/cancel supersede still-PENDING reminders for the old time (`supersede_pending_notifications`) so a patient is never reminded about a time that no longer applies | Reschedule re-arms existing rows as UPDATE; cancel re-arms as DELETE — never creates new rows |
 | DEMO_MODE provider | `MockAIProvider` — keyword-based urgency, always schema-valid | `MockEmailProvider` — records sends in memory, never touches network | `MockCalendarProvider` — in-memory event store |
 | Test coverage | `test_ai.py` (11), `test_e2e.py` failure cases | `test_notifications.py` (14), `test_e2e.py` failure cases | `test_calendar.py` (15), `test_e2e.py` failure cases |
@@ -59,8 +66,8 @@ identical — a failed call never raises past the API boundary, it produces a `F
 
 This isn't an *external*-service failure, but it's the other place the system must not
 silently break existing state: when a doctor is marked on leave, `DoctorLeaveService`
-must find every overlapping appointment, mark it `CONFLICTED` (never delete it), and
-queue a notification — all inside one transaction (`db.flush()` per step, one
+must find every overlapping appointment, mark it `CONFLICTED` (never delete it), retire
+its queued reminders, and queue a notification — all inside one transaction (`db.flush()` per step, one
 `db.commit()` at the end). If any step raises, `db.rollback()` discards the whole
 attempt: no leave row, no `CONFLICTED` status, no notification job survives a partial
 failure. See `docs/system-design.md` §2 and `test_leave_conflicts.py::test_leave_creation_is_transactional_on_partial_failure`.

@@ -1,6 +1,7 @@
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,14 @@ async def app_exception_handler(request: Request, exc: AppException):
 async def global_exception_handler(request: Request, exc: Exception):
     """Fallback handler for unhandled exceptions."""
     logger.error(f"Unhandled Exception: {exc} on {request.url.path}", exc_info=True)
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal server error occurred.", "error_code": "INTERNAL_ERROR"}
     )
+    # This handler runs outside CORSMiddleware, so without these headers the
+    # browser blocks the response and the frontend reports a network failure.
+    origin = request.headers.get("origin")
+    if origin and settings.is_cors_origin_allowed(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    return response

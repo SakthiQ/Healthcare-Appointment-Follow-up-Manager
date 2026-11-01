@@ -84,6 +84,17 @@ class NotificationService:
         (e.g. reminders for a time the appointment has moved away from)."""
         return notification_repository.supersede_pending(db, appointment_id, notification_type, reason)
 
+    def supersede_pending_notifications_no_commit(
+        self,
+        db: Session,
+        appointment_id: str,
+        notification_type: NotificationType,
+        reason: str,
+    ) -> int:
+        """Like supersede_pending_notifications but only flushes — for callers
+        (e.g. DoctorLeaveService) that own a larger atomic transaction."""
+        return notification_repository.supersede_pending_no_commit(db, appointment_id, notification_type, reason)
+
     # --- Processing ---
     def process_job(self, db: Session, job: NotificationJob) -> NotificationJob:
         recipient = user_repository.get_by_id(db, job.recipient_id)

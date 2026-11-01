@@ -336,3 +336,51 @@ def test_leave_creation_is_transactional_on_partial_failure(client):
             }, headers=admin_headers)
     finally:
         leave_service_module.notification_service.queue_notification_no_commit = original_queue
+
+
+def test_leave_conflict_retires_queued_appointment_reminders(client, db_session):
+    """The patient has just been told the appointment can't go ahead, so neither
+    side may later be reminded about it."""
+    from models.notification import NotificationJob
+
+    doc, _, admin_headers, patients = setup_leave_test_env(client)
+    leave_day = get_next_monday() + timedelta(days=21)
+    start_dt = datetime.combine(leave_day, time(9, 0), tzinfo=timezone.utc)
+    end_dt = datetime.combine(leave_day, time(9, 30), tzinfo=timezone.utc)
+    appt = book_appointment(client, patients[0], doc["id"], start_dt, end_dt)
+
+    r = client.post(f"/api/v1/admin/doctors/{doc['id']}/leaves", json={
+        "leave_date": leave_day.isoformat()
+    }, headers=admin_headers)
+    assert r.status_code == 201
+
+    db_session.expire_all()
+    reminders = db_session.query(NotificationJob).filter(
+        NotificationJob.appointment_id == appt["id"],
+        NotificationJob.notification_type == NotificationType.APPOINTMENT_REMINDER,
+    ).all()
+    assert len(reminders) == 2
+    assert all(j.status == NotificationStatus.FAILED for j in reminders)
+    assert all("leave" in j.last_error for j in reminders)
+    assert get_conflict_jobs_for_appointment(db_session, appt["id"])[0].status == NotificationStatus.PENDING
+
+
+def test_hold_cannot_be_confirmed_after_leave_is_added(client):
+    doc, _, admin_headers, patients = setup_leave_test_env(client)
+    leave_day = get_next_monday() + timedelta(days=28)
+    start_dt = datetime.combine(leave_day, time(9, 0), tzinfo=timezone.utc)
+    end_dt = datetime.combine(leave_day, time(9, 30), tzinfo=timezone.utc)
+    hold = client.post("/api/v1/slots/holds", json={
+        "doctor_id": doc["id"], "start_time": start_dt.isoformat(), "end_time": end_dt.isoformat()
+    }, headers=patients[0])
+    assert hold.status_code == 201
+
+    client.post(f"/api/v1/admin/doctors/{doc['id']}/leaves", json={
+        "leave_date": leave_day.isoformat()
+    }, headers=admin_headers)
+
+    r = client.post("/api/v1/appointments", json={
+        "doctor_id": doc["id"], "hold_id": hold.json()["id"]
+    }, headers=patients[0])
+    assert r.status_code == 409
+    assert "no longer available" in r.json()["detail"]

@@ -20,8 +20,9 @@ class DoctorLeaveService:
        doctor whose start_time falls on the leave date.
     3. Mark each as CONFLICTED — the original appointment row (patient,
        time, history) is preserved, never deleted.
-    4. Queue a DOCTOR_LEAVE_CONFLICT notification job for each affected
-       patient (delivery itself is Phase 9's notification subsystem).
+    4. Retire reminders still queued for each appointment, and queue a
+       DOCTOR_LEAVE_CONFLICT notification job for each affected patient
+       (delivery itself is Phase 9's notification subsystem).
     All of the above commits atomically: if any step fails, nothing is
     persisted — not the leave, not the conflict markers, not the jobs.
     """
@@ -48,6 +49,10 @@ class DoctorLeaveService:
             for appointment in affected_appointments:
                 original_start_time = appointment.start_time.isoformat()
                 appointment_repository.update_status_no_commit(db, appointment, AppointmentStatus.CONFLICTED)
+                notification_service.supersede_pending_notifications_no_commit(
+                    db, appointment.id, NotificationType.APPOINTMENT_REMINDER,
+                    reason="Superseded: doctor leave conflict.",
+                )
                 notification_service.queue_notification_no_commit(
                     db,
                     appointment_id=appointment.id,

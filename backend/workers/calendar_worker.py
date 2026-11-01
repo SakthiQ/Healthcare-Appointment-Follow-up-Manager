@@ -26,13 +26,22 @@ class CalendarWorker:
 
     def run_once(self, db: Session) -> Dict[str, int]:
         """Process one batch of pending calendar syncs. Never raises for an
-        individual row — CalendarService.process_pending_row already converts
-        failures into a persisted row state (PENDING_SYNC-for-retry or FAILED)."""
+        individual row — CalendarService.process_pending_row converts provider
+        failures into a persisted row state (PENDING_SYNC-for-retry or FAILED);
+        a row that could not even be persisted (a database error) stays
+        PENDING_SYNC for the next run, and the rest of the batch still runs."""
         rows = calendar_repository.get_due_syncs(db, limit=self.batch_size)
-        stats = {"claimed": len(rows), "synced": 0, "failed": 0, "retrying": 0}
+        stats = {"claimed": len(rows), "synced": 0, "failed": 0, "retrying": 0, "errored": 0}
 
         for row in rows:
-            processed = calendar_service.process_pending_row(db, row)
+            row_id = row.id
+            try:
+                processed = calendar_service.process_pending_row(db, row)
+            except Exception:
+                db.rollback()
+                logger.exception("CalendarWorker: could not process row %s", row_id)
+                stats["errored"] += 1
+                continue
             if processed.status == CalendarSyncStatus.SYNCED:
                 stats["synced"] += 1
             elif processed.status == CalendarSyncStatus.FAILED:

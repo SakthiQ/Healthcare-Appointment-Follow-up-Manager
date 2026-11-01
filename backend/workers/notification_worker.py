@@ -10,9 +10,11 @@ module can also be run standalone as a separate OS process:
 """
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from models.notification import NotificationStatus
 from repositories.notification_repository import notification_repository
 from services.notification_service import notification_service
@@ -28,14 +30,31 @@ class NotificationWorker:
 
     def run_once(self, db: Session) -> Dict[str, int]:
         """Claim one batch of due jobs and attempt to process each. Returns
-        counts for observability — never raises for an individual job failure,
-        since NotificationService.process_job already converts failures into
-        a persisted job state (PENDING-for-retry or FAILED)."""
+        counts for observability — never raises for an individual job failure.
+        NotificationService.process_job converts provider failures into a
+        persisted job state (PENDING-for-retry or FAILED); a job that could not
+        even be persisted (a database error) stays PROCESSING, and
+        requeue_stale_processing recovers it on a later run, along with any
+        batch abandoned by a crashed worker."""
+        stale_before = datetime.now(timezone.utc) - timedelta(minutes=settings.NOTIFICATION_PROCESSING_TIMEOUT_MINUTES)
+        recovered = notification_repository.requeue_stale_processing(
+            db, stale_before, settings.NOTIFICATION_MAX_ATTEMPTS
+        )
+        if recovered:
+            logger.warning("NotificationWorker: recovered %s job(s) left PROCESSING by a previous run", recovered)
+
         jobs = notification_repository.get_due_jobs(db, limit=self.batch_size)
-        stats = {"claimed": len(jobs), "sent": 0, "failed": 0, "retrying": 0}
+        stats = {"claimed": len(jobs), "sent": 0, "failed": 0, "retrying": 0, "errored": 0}
 
         for job in jobs:
-            processed = notification_service.process_job(db, job)
+            job_id = job.id
+            try:
+                processed = notification_service.process_job(db, job)
+            except Exception:
+                db.rollback()
+                logger.exception("NotificationWorker: could not process job %s", job_id)
+                stats["errored"] += 1
+                continue
             if processed.status == NotificationStatus.SENT:
                 stats["sent"] += 1
             elif processed.status == NotificationStatus.FAILED:

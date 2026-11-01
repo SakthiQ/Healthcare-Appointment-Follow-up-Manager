@@ -116,8 +116,21 @@ class NotificationJobRepository:
         'superseded' value; `last_error` records why, so the distinction stays
         observable and the audit trail is preserved rather than deleted.
         """
+        affected = self.supersede_pending_no_commit(db, appointment_id, notification_type, reason)
+        db.commit()
+        return affected
+
+    def supersede_pending_no_commit(
+        self,
+        db: Session,
+        appointment_id: str,
+        notification_type: NotificationType,
+        reason: str,
+    ) -> int:
+        """Like supersede_pending but leaves the commit to the caller, whose
+        transaction this update joins."""
         now = datetime.now(timezone.utc)
-        affected = db.query(NotificationJob).filter(
+        return db.query(NotificationJob).filter(
             NotificationJob.appointment_id == appointment_id,
             NotificationJob.notification_type == notification_type,
             NotificationJob.status == NotificationStatus.PENDING,
@@ -125,8 +138,30 @@ class NotificationJobRepository:
             {"status": NotificationStatus.FAILED, "last_error": reason, "updated_at": now},
             synchronize_session=False,
         )
+
+    def requeue_stale_processing(self, db: Session, stale_before: datetime, max_attempts: int) -> int:
+        """Recover jobs a worker claimed but never finished (it crashed or was
+        restarted mid-batch). Each recovery counts as an attempt, so a job that
+        keeps killing its worker still ends in FAILED. Delivery is at-least-once:
+        a worker that died just after sending causes one duplicate email, which
+        is preferable to a reminder that is silently never sent."""
+        query = db.query(NotificationJob).filter(
+            NotificationJob.status == NotificationStatus.PROCESSING,
+            NotificationJob.updated_at <= stale_before,
+        )
+        if db.bind and db.bind.dialect.name != "sqlite":
+            query = query.with_for_update(skip_locked=True)
+
+        jobs = query.all()
+        for job in jobs:
+            job.attempts += 1
+            job.last_error = "Worker stopped before finishing this job."
+            job.status = (
+                NotificationStatus.FAILED if job.attempts >= max_attempts else NotificationStatus.PENDING
+            )
+            job.updated_at = datetime.now(timezone.utc)
         db.commit()
-        return affected
+        return len(jobs)
 
     def mark_failed_permanent(self, db: Session, job: NotificationJob, error_message: str) -> NotificationJob:
         """Terminal failure: max attempts exhausted or a non-retryable error."""

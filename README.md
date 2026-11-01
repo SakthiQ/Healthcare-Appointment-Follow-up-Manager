@@ -38,7 +38,7 @@ doesn't mean.
 | Auth | JWT (PyJWT) + bcrypt |
 | Background jobs | Two simple polling workers (no broker/queue) |
 | Frontend | React 18 + TypeScript + Vite, React Router, plain `fetch` |
-| Testing | pytest (backend, 131 tests) — see [Running tests](#running-tests) |
+| Testing | pytest (backend, 148 tests) — see [Running tests](#running-tests) |
 
 No microservices, Kafka, Kubernetes, Redis, RAG, or multi-agent frameworks — a modular
 monolith throughout, by design (see `docs/engineering-decisions.md`).
@@ -125,6 +125,7 @@ Summary:
 | `SMTP_*`, `EMAIL_FROM_ADDRESS` | SMTP relay for real email | email is real |
 | `GOOGLE_*` | OAuth 2.0 client + refresh token for Calendar API | calendar is real |
 | `NOTIFICATION_MAX_ATTEMPTS`, `CALENDAR_MAX_ATTEMPTS` | Bounded retry counts | optional (sensible defaults) |
+| `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` | When a job abandoned by a crashed worker goes back in the queue | optional (default 30) |
 | `VITE_API_BASE_URL` | Frontend: backend origin in production (empty = same-origin/dev proxy) | production build |
 
 Never commit a real `.env` — `.gitignore` excludes it; only `.env.example` files are tracked.
@@ -235,7 +236,7 @@ python -m pytest tests/ -v
 ```
 
 Tests use an isolated in-memory SQLite database (`tests/conftest.py`) — they do not
-touch `DATABASE_URL`. **131 tests, 131 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
+touch `DATABASE_URL`. **148 tests, 148 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
 
 ## Deployment
 
@@ -278,7 +279,7 @@ Each entry gives the reasoning behind it.
 
 All 13 phases in `AGENT_PHASES.md` are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 131/131
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 148/148
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app
