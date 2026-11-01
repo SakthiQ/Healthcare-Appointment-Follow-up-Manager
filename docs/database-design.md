@@ -169,6 +169,7 @@ stateDiagram-v2
     CONFIRMED --> CANCELLED : Patient/Doctor/Admin cancels
     CONFIRMED --> CONFLICTED : Doctor leave added
     CONFIRMED --> COMPLETED : Consultation completed
+    RESCHEDULED --> COMPLETED : Consultation completed
     RESCHEDULED --> CONFIRMED : Reschedule confirmed
     RESCHEDULED --> CANCELLED : Cancelled during reschedule
     CONFLICTED --> RESCHEDULED : Patient re-books slot
@@ -206,13 +207,13 @@ stateDiagram-v2
     [*] --> PENDING : Job created
     PENDING --> PROCESSING : Picked up by worker
     PROCESSING --> SENT : Delivery success
-    PROCESSING --> PENDING : Transient failure (retries < max)
+    PROCESSING --> PENDING : Transient failure, or worker died (retries < max)
     PROCESSING --> FAILED : Permanent failure (retries >= max)
 ```
 
 **State Definitions:**
 - **PENDING**: Scheduled for delivery
-- **PROCESSING**: In-flight by notification worker
+- **PROCESSING**: In-flight by notification worker. A job still here after `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` had its worker die and is requeued, so delivery is at-least-once
 - **SENT**: Successfully delivered via provider
 - **FAILED**: Permanent failure after maximum retry attempts (e.g. 3 attempts)
 

@@ -81,6 +81,8 @@ The provider's raw response is never trusted or stored directly — it always pa
 
 The appointment row is never read for write, never locked, and never touched by this pipeline — AI failure and appointment integrity are fully decoupled. Each generation attempt inserts a **new** `AISummary` row rather than overwriting the previous one, so failed attempts remain in the audit trail; `GET` endpoints always return the most recent row by `created_at`, giving a natural "retry" path (regenerate → new row → latest is now SUCCESS).
 
+`error_message` is technical detail for clinic staff: API responses to a patient return `null` in its place, while doctors and admins see it. A provider's non-2xx response body goes to the logs only, never into `error_message`.
+
 ## Persistence & retrieval
 
 - `AISummary` (from Phase 2's schema) stores `appointment_id`, `type` (`PRE_VISIT`/`POST_VISIT`), `status` (`PENDING`/`SUCCESS`/`FAILED`), `payload` (JSON, null on failure), `error_message` (null on success), `created_at`.

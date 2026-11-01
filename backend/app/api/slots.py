@@ -37,8 +37,8 @@ def get_slot_hold(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retrieve hold details."""
-    return hold_service.get_hold(db, hold_id)
+    """Retrieve hold details (the patient who created the hold, or an admin)."""
+    return hold_service.get_hold(db, hold_id, current_user)
 
 
 @router.post("/slots/holds/{hold_id}/release", status_code=status.HTTP_204_NO_CONTENT)

@@ -6,6 +6,7 @@ from repositories.hold_repository import hold_repository
 from services.slot_service import slot_service
 from schemas.slot import HoldCreateRequest, HoldResponse
 from models.appointment import AppointmentHold, AppointmentStatus
+from models.user import User, UserRole
 
 
 from app.core.datetime_utils import ensure_utc
@@ -57,11 +58,13 @@ class HoldService:
         )
         return HoldResponse.model_validate(hold)
 
-    def get_hold(self, db: Session, hold_id: str) -> HoldResponse:
+    def get_hold(self, db: Session, hold_id: str, user: User) -> HoldResponse:
         hold_repository.expire_stale_holds(db)
         hold = hold_repository.get_by_id(db, hold_id)
         if not hold:
             raise NotFoundError("Hold not found.")
+        if user.role != UserRole.ADMIN and hold.patient_id != user.id:
+            raise ForbiddenError("Not authorized to view this hold.")
         return HoldResponse.model_validate(hold)
 
     def confirm_hold(self, db: Session, hold_id: str, patient_id: str) -> AppointmentHold:

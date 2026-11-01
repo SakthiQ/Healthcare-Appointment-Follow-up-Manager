@@ -664,13 +664,14 @@ def test_e2e_failure_invalid_ai_response_recorded_not_crashed(client, db_session
 
     assert r.status_code == 200
     assert r.json()["status"] == AISummaryStatus.FAILED.value
-    assert "Invalid AI response schema" in r.json()["error_message"]
+    assert r.json()["error_message"] is None  # the reason is for clinic staff, not the patient
 
     row = db_session.query(AISummary).filter(
         AISummary.appointment_id == appt["id"], AISummary.type == AISummaryType.PRE_VISIT
     ).first()
     assert row.status == AISummaryStatus.FAILED
     assert row.payload is None
+    assert "Invalid AI response schema" in row.error_message
 
 
 def test_e2e_failure_email_unavailable_retries_without_touching_appointment(client, db_session, clinic):

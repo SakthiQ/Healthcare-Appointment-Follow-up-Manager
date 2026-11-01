@@ -166,7 +166,7 @@ class GoogleCalendarProvider(CalendarProvider):
             self._access_token_expires_at = now + timedelta(seconds=max(expires_in - 60, 30))
             return self._access_token
 
-    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+    def _request(self, method: str, path: str, not_found_statuses=(404,), **kwargs) -> httpx.Response:
         token = self._get_access_token()
         try:
             response = httpx.request(
@@ -181,7 +181,7 @@ class GoogleCalendarProvider(CalendarProvider):
         except httpx.HTTPError as exc:
             raise CalendarProviderTransientError(f"Calendar API request failed: {exc}") from exc
 
-        if response.status_code == 404:
+        if response.status_code in not_found_statuses:
             raise CalendarEventNotFoundError(f"Calendar event not found: {response.text}")
         if response.status_code == 429 or response.status_code >= 500:
             raise CalendarProviderTransientError(
@@ -233,7 +233,14 @@ class GoogleCalendarProvider(CalendarProvider):
         )
 
     def delete_event(self, external_event_id: str) -> None:
-        self._request("DELETE", f"/calendars/{self._calendar_id}/events/{external_event_id}")
+        # Google answers 410 Gone for an event that was already deleted. Only delete
+        # treats that as "not found": an update must not go on to recreate the event,
+        # since its id stays reserved and the create would falsely report success.
+        self._request(
+            "DELETE",
+            f"/calendars/{self._calendar_id}/events/{external_event_id}",
+            not_found_statuses=(404, 410),
+        )
 
 
 def get_calendar_provider() -> CalendarProvider:

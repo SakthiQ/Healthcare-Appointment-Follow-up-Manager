@@ -510,3 +510,39 @@ def test_google_provider_without_credentials_raises_permanent_error():
             assert "not configured" in str(exc)
     finally:
         settings.GOOGLE_CLIENT_ID = original
+
+
+def _google_provider_answering(monkeypatch, status_code):
+    import httpx
+    from providers.calendar_provider import GoogleCalendarProvider
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(200, json={"access_token": "t", "expires_in": 3600}))
+    monkeypatch.setattr(httpx, "request", lambda *a, **k: httpx.Response(status_code, text="Resource has been deleted"))
+    provider = GoogleCalendarProvider()
+    provider._client_id = provider._client_secret = provider._refresh_token = "configured"
+    return provider
+
+
+def test_google_delete_of_already_deleted_event_counts_as_not_found(monkeypatch):
+    """Google answers 410 Gone here. CalendarService treats not-found on delete as
+    success, so a repeated delete must not end the row in FAILED."""
+    from providers.calendar_provider import CalendarEventNotFoundError
+
+    provider = _google_provider_answering(monkeypatch, 410)
+    try:
+        provider.delete_event("event-id")
+        assert False, "expected CalendarEventNotFoundError"
+    except CalendarEventNotFoundError:
+        pass
+
+
+def test_google_update_of_deleted_event_stays_a_permanent_error(monkeypatch):
+    """Not "not found": recreating under the same id, which Google keeps reserved,
+    would get a 409 that reads as success while no event exists."""
+    provider = _google_provider_answering(monkeypatch, 410)
+    now = datetime.now(timezone.utc)
+    try:
+        provider.update_event("event-id", "s", "d", now, now)
+        assert False, "expected CalendarProviderPermanentError"
+    except CalendarProviderPermanentError:
+        pass

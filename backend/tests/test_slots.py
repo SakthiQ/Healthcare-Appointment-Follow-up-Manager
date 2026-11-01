@@ -52,6 +52,21 @@ def get_next_monday() -> date:
     return today + timedelta(days=days_ahead)
 
 
+def test_hold_is_readable_only_by_its_patient_and_admin(client):
+    doc, admin_headers, headers1, headers2 = setup_doctor_and_patient(client)
+    monday = get_next_monday() + timedelta(days=21)
+    start = datetime.combine(monday, time(9, 0), tzinfo=timezone.utc)
+    end = datetime.combine(monday, time(9, 30), tzinfo=timezone.utc)
+    hold = client.post("/api/v1/slots/holds", json={
+        "doctor_id": doc["id"], "start_time": start.isoformat(), "end_time": end.isoformat()
+    }, headers=headers1).json()
+    url = f"/api/v1/slots/holds/{hold['id']}"
+
+    assert client.get(url, headers=headers1).status_code == 200
+    assert client.get(url, headers=admin_headers).status_code == 200
+    assert client.get(url, headers=headers2).status_code == 403
+
+
 def test_slot_generation(client):
     """Test generating slots from working hours and slot duration."""
     doc, _, _, _ = setup_doctor_and_patient(client)

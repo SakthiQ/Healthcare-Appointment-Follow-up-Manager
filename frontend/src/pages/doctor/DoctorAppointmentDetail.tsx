@@ -94,6 +94,7 @@ export default function DoctorAppointmentDetail() {
           : 'Consultation saved.',
       );
       consultationQuery.reload();
+      apptQuery.reload(); // saving a consultation moves the appointment to COMPLETED
     } catch (err) {
       setSubmitError(err);
     } finally {

@@ -103,7 +103,8 @@ Two independent guards, because retries are expected:
 | HTTP 429 / 5xx | `CalendarProviderTransientError` | Same as above |
 | HTTP 4xx (bad request, forbidden), missing credentials | `CalendarProviderPermanentError` | Row marked `FAILED` immediately — no retry burn |
 | HTTP 404 on update | `CalendarEventNotFoundError` | **Reconciled**: event is recreated so the appointment stays represented |
-| HTTP 404 on delete | `CalendarEventNotFoundError` | Treated as success — already gone |
+| HTTP 404 or 410 on delete | `CalendarEventNotFoundError` | Treated as success — already gone |
+| HTTP 410 on update | `CalendarProviderPermanentError` | Row marked `FAILED`: the deleted event's id stays reserved, so recreating it would get a 409 that reads as success |
 | Retries exhausted (`CALENDAR_MAX_ATTEMPTS`) | — | Row marked `FAILED` (terminal; worker skips it) |
 
 In every case the appointment row is untouched. `CalendarService` never writes
