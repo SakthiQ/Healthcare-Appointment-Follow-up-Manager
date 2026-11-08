@@ -314,7 +314,7 @@ export default function BookAppointment() {
                 <>
                   <p className="muted small">
                     {available.length} of {slotsQuery.data?.total_slots} slots available. Times shown in
-                    UTC.
+                    the doctor's timezone: {timeZoneName(doctor?.timezone)}.
                   </p>
                   <div className="slot-grid">
                     {available.map((slot) => (

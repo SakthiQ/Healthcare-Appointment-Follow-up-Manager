@@ -303,7 +303,7 @@ export default function DoctorConfig() {
         {scheduleQuery.loading ? <Spinner /> : null}
         <ErrorBanner error={scheduleError} />
         <p className="muted small">
-          Tick the days this doctor works. Saving replaces the entire weekly schedule. Times are UTC.
+          Tick the days this doctor works. Saving replaces the entire weekly schedule. Times are in this doctor's timezone (shown in the heading).
         </p>
         <form onSubmit={handleSaveSchedule} noValidate>
           {week.map((day, i) => (
