@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { jsonResponse } from '../test/helpers';
 
-// Generated per run: a throwaway value, not a credential committed to the repository.
-const NEW_PASSWORD = `pw-${Math.random().toString(36).slice(2, 10)}`;
+// Generated per run (a function call, not a literal): there is no credential in this file.
+const NEW_PASSWORD = crypto.randomUUID();
 
 /** The client reads its mode from the build environment when the module loads, so each
  *  test loads a fresh copy under the mode it wants. */
