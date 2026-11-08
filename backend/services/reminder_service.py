@@ -44,7 +44,7 @@ class ReminderService:
         `frequency` (e.g. "twice daily") is free text on the Medication model
         and is carried into each job's payload for the notification content —
         this schedules one daily check-in reminder per medication rather than
-        parsing frequency into exact per-dose times, which AGENT_SPEC.md does
+        parsing frequency into exact per-dose times, which the project brief does
         not require and which free-text frequency can't reliably support.
         """
         now = datetime.now(timezone.utc)

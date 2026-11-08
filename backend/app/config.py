@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     # Off by default so the demo flow (register, then use the app) keeps working.
     REQUIRE_EMAIL_VERIFICATION: bool = False
 
+    # Staff invitations: an admin invites a doctor or another admin by email; the invitee opens
+    # the link on the normal signup page, where the role comes from the invitation, not the form.
+    INVITATION_TTL_DAYS: int = 7
+    INVITE_RATE_LIMIT_PER_HOUR: int = 30                # invitations an admin may send per hour
+
     # When set, a doctor cannot record a consultation (which marks the appointment
     # COMPLETED and schedules medication reminders) more than this many minutes before
     # the appointment starts. Unset = no check, which the demo flow needs: it books a

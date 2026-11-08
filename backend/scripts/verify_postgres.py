@@ -30,6 +30,7 @@ os.environ.update(DATABASE_URL=PG, ALLOW_PRIVILEGED_SELF_REGISTRATION="True", EN
 sys.path.insert(0, BACKEND)
 
 import psycopg2
+import psycopg2.errors
 
 # Throwaway passwords for the users this script creates, generated per run.
 TEST_PASSWORD = 'pw-' + secrets.token_hex(8)
@@ -93,11 +94,28 @@ check("exactly one of the duplicate active holds survived", active == 1, f"activ
 cols = {r[0] for r in sql("SELECT column_name FROM information_schema.columns WHERE table_name IN ('doctors','users')", fetch=True)}
 check("new columns exist", {"timezone", "token_version"} <= cols)
 check("login_throttles table exists", bool(sql("SELECT to_regclass('public.login_throttles')", fetch=True)[0][0]))
-for table in ("rate_limits", "auth_tokens", "audit_logs"):
+for table in ("rate_limits", "auth_tokens", "audit_logs", "invitations"):
     check(f"{table} table exists", bool(sql("SELECT to_regclass(%s)", ("public." + table,), fetch=True)[0][0]))
 enum_values = {r[0] for r in sql(
     "SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'notificationtype'", fetch=True)}
 check("the notificationtype enum gained PASSWORD_RESET and EMAIL_VERIFICATION", {"PASSWORD_RESET", "EMAIL_VERIFICATION"} <= enum_values)
+check("the notificationtype enum gained INVITATION", "INVITATION" in enum_values)
+check("notification_jobs.recipient_id is nullable and recipient_email exists",
+      sql("SELECT is_nullable FROM information_schema.columns WHERE table_name = 'notification_jobs' AND column_name = 'recipient_id'",
+          fetch=True)[0][0] == "YES"
+      and bool(sql("SELECT 1 FROM information_schema.columns WHERE table_name = 'notification_jobs' AND column_name = 'recipient_email'",
+                   fetch=True)))
+try:
+    sql("INSERT INTO notification_jobs (id,notification_type,status,attempts,created_at,updated_at) "
+        "VALUES ('n-none','INVITATION','PENDING',0,%s,%s)", (now, now))
+    check("a notification job with no recipient at all is rejected by the CHECK constraint", False, "the insert was accepted")
+except psycopg2.errors.CheckViolation as exc:
+    check("a notification job with no recipient at all is rejected by the CHECK constraint",
+          "ck_notification_has_recipient" in str(exc), str(exc).splitlines()[0])
+sql("INSERT INTO notification_jobs (id,recipient_email,notification_type,status,attempts,created_at,updated_at) "
+    "VALUES ('n-mail','someone@pg.com','INVITATION','PENDING',0,%s,%s)", (now, now))
+check("a job addressed to an email address (no user) is accepted", True)
+sql("DELETE FROM notification_jobs WHERE id = 'n-mail'")
 check("users that existed before the email_verified column count as verified",
       sql("SELECT bool_and(email_verified) FROM users", fetch=True)[0][0] is True)
 sql("DELETE FROM appointment_holds; DELETE FROM doctors; DELETE FROM users;")
@@ -300,6 +318,34 @@ page = client.get("/api/v1/admin/audit-logs", params={"action": "auth."}, header
 check("logins are audited and the admin audit endpoint reads them",
       audited >= 1 and page.status_code == 200 and page.json()["total"] >= 1,
       f"rows={audited} endpoint={page.status_code}")
+
+# --- staff invitations on PostgreSQL: one signup page, role from the invitation, single use
+invited = client.post("/api/v1/admin/invitations", json={
+    "email": "newdoc@pg.com", "role": "DOCTOR", "specialization": "Neurology", "timezone": "Asia/Kolkata"}, headers=admin)
+invite_token = parse_qs(urlparse(invited.json()["invite_link"]).query)["invite"][0]
+mailed = sql("SELECT recipient_id, recipient_email FROM notification_jobs WHERE notification_type = 'INVITATION' "
+             "ORDER BY created_at DESC LIMIT 1", fetch=True)[0]
+check("an invitation is created and its email is queued for the address (no user yet)",
+      invited.status_code == 201 and mailed == (None, "newdoc@pg.com"), f"status={invited.status_code} job={mailed}")
+
+
+def accept(token, email, role="PATIENT"):
+    return client.post("/api/v1/auth/register", json={
+        "email": email, "password": TEST_PASSWORD, "full_name": "Invited Doc", "role": role, "invite_token": token})
+
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    accepted = list(pool.map(lambda _: accept(invite_token, "newdoc@pg.com").status_code, range(8)))
+users_made = sql("SELECT count(*) FROM users WHERE email = 'newdoc@pg.com'", fetch=True)[0][0]
+check("8 concurrent signups with one invitation: exactly one account, the rest are rejected, no 5xx",
+      accepted.count(201) == 1 and all(c < 500 for c in accepted) and users_made == 1, f"codes={sorted(accepted)} users={users_made}")
+role_made, spec_made, tz_made, verified = sql(
+    "SELECT u.role::text, d.specialization, d.timezone, u.email_verified FROM users u JOIN doctors d ON d.user_id = u.id "
+    "WHERE u.email = 'newdoc@pg.com'", fetch=True)[0]
+check("the account got the invited role (not the form's PATIENT), the doctor profile and a verified email",
+      (role_made, spec_made, tz_made, verified) == ("DOCTOR", "Neurology", "Asia/Kolkata", True),
+      f"{(role_made, spec_made, tz_made, verified)}")
+check("a spent invitation cannot be used again", accept(invite_token, "newdoc@pg.com").status_code == 422)
 
 # --- the rate limiter under real concurrency: row locks make the count exact
 from app.config import settings

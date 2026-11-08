@@ -27,6 +27,7 @@ import DoctorManagement from './pages/admin/DoctorManagement';
 import DoctorConfig from './pages/admin/DoctorConfig';
 import ConflictedAppointments from './pages/admin/ConflictedAppointments';
 import AuditLog from './pages/admin/AuditLog';
+import Invitations from './pages/admin/Invitations';
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -155,6 +156,15 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN']}>
                 <ConflictedAppointments />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/invitations"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <Invitations />
               </ProtectedRoute>
             }
           />

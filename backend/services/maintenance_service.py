@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict
 from sqlalchemy.orm import Session
 from repositories.auth_token_repository import auth_token_repository
+from repositories.invitation_repository import invitation_repository
 from repositories.login_throttle_repository import login_throttle_repository
 from repositories.rate_limit_repository import rate_limit_repository
 
@@ -19,6 +20,7 @@ class MaintenanceService:
             "rate_limits": rate_limit_repository.purge_older_than(db, one_day_ago),
             "login_throttles": login_throttle_repository.purge_stale(db, one_day_ago),
             "auth_tokens": auth_token_repository.purge_expired(db, now - timedelta(days=7)),
+            "invitations": invitation_repository.purge_stale(db, now - timedelta(days=30)),
         }
         return counts
 

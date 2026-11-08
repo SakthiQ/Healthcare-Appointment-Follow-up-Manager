@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 from app.core.datetime_utils import UTCDateTime
-from sqlalchemy import Column, String, Text, Integer, ForeignKey, Enum as SQLEnum
+from sqlalchemy import CheckConstraint, Column, String, Text, Integer, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -15,6 +15,7 @@ class NotificationType(str, enum.Enum):
     MEDICATION_REMINDER = "MEDICATION_REMINDER"
     PASSWORD_RESET = "PASSWORD_RESET"
     EMAIL_VERIFICATION = "EMAIL_VERIFICATION"
+    INVITATION = "INVITATION"
 
 
 class NotificationStatus(str, enum.Enum):
@@ -29,7 +30,10 @@ class NotificationJob(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     appointment_id = Column(String(36), ForeignKey("appointments.id", ondelete="CASCADE"), nullable=True, index=True)
-    recipient_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # A user, or just an email address for someone who has no account yet (an invitee). The
+    # CHECK below guarantees one of the two, so a job can never be queued to nobody.
+    recipient_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    recipient_email = Column(String(255), nullable=True)
     notification_type = Column(SQLEnum(NotificationType), nullable=False, index=True)
     status = Column(SQLEnum(NotificationStatus), nullable=False, default=NotificationStatus.PENDING, index=True)
     attempts = Column(Integer, nullable=False, default=0)
@@ -38,6 +42,10 @@ class NotificationJob(Base):
     payload = Column(Text, nullable=True)
     created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        CheckConstraint("recipient_id IS NOT NULL OR recipient_email IS NOT NULL", name="ck_notification_has_recipient"),
+    )
 
     # Relationships
     appointment = relationship("Appointment", back_populates="notification_jobs")

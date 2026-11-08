@@ -5,7 +5,7 @@ from models.clinical import AISummaryType, AISummaryStatus
 
 
 class PreVisitAIOutput(BaseModel):
-    """Strict contract for pre-visit AI output, per AGENT_SPEC.md."""
+    """Strict contract for pre-visit AI output: urgency, chief complaint, three questions."""
     urgency: Literal["Low", "Medium", "High"]
     chief_complaint: str = Field(..., min_length=1)
     suggested_questions: List[str] = Field(..., min_length=3, max_length=3)

@@ -142,7 +142,7 @@ backend/
 │   ├── env.py
 │   └── versions/                 # 4 migrations: initial_schema, create_domain_models,
 │                                  # add_double_booking_unique_constraint, add_calendar_sync_retry_fields
-└── tests/                        # 231 backend tests total (see docs/requirement-mapping.md)
+└── tests/                        # 249 backend tests total (see docs/requirement-mapping.md)
     ├── conftest.py
     ├── test_config.py, test_database.py, test_health.py       # Phase 1
     ├── test_models.py                                          # Phase 2 (+ Phase 6 hardening)

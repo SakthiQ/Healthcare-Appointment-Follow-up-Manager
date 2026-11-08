@@ -3,11 +3,11 @@
 This replaces the Phase 0 planning draft (`docs/requirement-map.md`, since removed),
 whose endpoint paths and test names never matched what was actually built. Every row
 below cites a real file, a real API path, and a real test that exists in the repository
-today. The full suite (231 backend tests, plus 91 frontend tests) passes.
+today. The full suite (249 backend tests, plus 104 frontend tests) passes.
 
 Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) · ❌ Not implemented
 
-| # | Requirement (from AGENT_SPEC.md) | Module | API / Mechanism | Test evidence | Status |
+| # | Requirement (from the original project brief) | Module | API / Mechanism | Test evidence | Status |
 |---|---|---|---|---|---|
 | 1 | Separate patient, doctor, admin portals | `frontend/src/pages/{patient,doctor,admin}` | React app, role-based nav (`Layout.tsx`) + route guard (`ProtectedRoute.tsx`) | Manual browser verification, Phase 11 | ⚠️ |
 | 2 | Patient registration & login | `services/auth_service.py` | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | `test_auth.py` (11 tests) | ✅ |
@@ -39,8 +39,9 @@ Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) �
 ## Notes on ⚠️ items
 
 - **#1 Portals** — functionally complete and manually verified end-to-end in a real
-  browser against a live backend (Phase 11), but there is no automated frontend test
-  suite (not required by AGENT_PHASES.md, but worth naming as a gap for future work).
+  browser against a live backend (Phase 11), and automated frontend tests (Vitest) now cover the
+  API client, auth, routing, layout, login, the account flows and the audit log. The booking and
+  consultation pages have no component tests.
 - **#12 Safe simultaneous booking** — the 100-thread test forces SQLite to serialize
   access (`StaticPool` + an explicit lock in the test itself), so it does not prove true
   concurrent-write safety on its own. The independent, dialect-agnostic proof is the DB
@@ -48,7 +49,7 @@ Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) �
   against a live PostgreSQL instance — see Known limitations in the root `README.md`.
 - **#18 Medication reminders** — reminder *cadence* is one check-in per day of
   `duration_days` (capped at 30), not a parse of the free-text `frequency` field into
-  exact per-dose times, since AGENT_SPEC.md doesn't require that and the input data
+  exact per-dose times, since the project brief doesn't require that and the input data
   can't reliably support it. Documented in `services/reminder_service.py` and
   `docs/failure-handling.md`.
 - **#19 Emails / #20 Calendar / #21 OAuth** — `RealEmailProvider` (SMTP) and

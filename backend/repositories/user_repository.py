@@ -30,6 +30,7 @@ class UserRepository:
         full_name: str,
         role: UserRole = UserRole.PATIENT,
         email_verified: bool = False,
+        commit: bool = True,
     ) -> User:
         user = User(
             email=email.lower().strip(),
@@ -39,8 +40,11 @@ class UserRepository:
             email_verified=email_verified,
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        if commit:
+            db.commit()
+            db.refresh(user)
+        else:
+            db.flush()  # assigns user.id; the caller commits, so a later failure undoes this too
         return user
 
     def create_doctor_profile(

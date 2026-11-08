@@ -18,6 +18,9 @@ class UserRegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=2, description="User full name")
     role: UserRole = Field(default=UserRole.PATIENT, description="User role: PATIENT, DOCTOR, ADMIN")
     specialization: Optional[str] = Field(default=None, description="Required if role is DOCTOR")
+    # From an invitation link. When present, the role and doctor profile come from the
+    # invitation and the `role` and `specialization` above are ignored.
+    invite_token: Optional[str] = Field(default=None, min_length=10, max_length=200)
 
     _password_fits_bcrypt = field_validator("password")(_password_fits_bcrypt)
 

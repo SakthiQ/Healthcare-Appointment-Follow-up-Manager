@@ -16,6 +16,7 @@ from models.notification import NotificationJob, NotificationType, NotificationS
 from models.calendar import CalendarEvent, CalendarSyncStatus, CalendarOperation
 from models.security import LoginThrottle, RateLimit, AuthToken, AuthTokenPurpose
 from models.audit import AuditLog
+from models.invitation import Invitation
 
 __all__ = [
     "Base",
@@ -45,4 +46,5 @@ __all__ = [
     "AuthToken",
     "AuthTokenPurpose",
     "AuditLog",
+    "Invitation",
 ]

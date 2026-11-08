@@ -2,7 +2,7 @@
 Simple polling worker for the notification subsystem (Phase 9).
 
 No external queue/broker — this is deliberately the "simple Python
-worker/scheduler" called for in AGENT_SPEC.md's tech stack, not Celery/Kafka/
+worker/scheduler" called for in the project brief's tech stack, not Celery/Kafka/
 Redis. NotificationWorker.run_once() is fully synchronous and testable; the
 module can also be run standalone as a separate OS process:
 

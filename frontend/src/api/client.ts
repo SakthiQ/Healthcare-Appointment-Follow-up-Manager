@@ -7,7 +7,11 @@ import type {
   Doctor,
   DoctorLeave,
   Hold,
+  Invitation,
+  InvitationCreated,
+  InvitationLookup,
   MedicationItem,
+  StaffRole,
   SlotGenerationResponse,
   SymptomReport,
   TokenResponse,
@@ -171,7 +175,12 @@ export const api = {
     full_name: string;
     role?: UserRole;
     specialization?: string;
+    /** From an invitation link. The invitation decides the role; `role` is then ignored. */
+    invite_token?: string;
   }) => post<User>('/auth/register', data),
+
+  /** What the signup page shows for an invitation link. */
+  lookupInvitation: (token: string) => post<InvitationLookup>('/auth/invitations/lookup', { token }),
 
   login: (data: { email: string; password: string }) => post<TokenResponse>('/auth/login', data),
 
@@ -301,6 +310,19 @@ export const api = {
     const qs = q.toString();
     return get<AuditLogPage>(`/admin/audit-logs${qs ? `?${qs}` : ''}`);
   },
+
+  createInvitation: (data: {
+    email: string;
+    role: StaffRole;
+    full_name?: string;
+    specialization?: string;
+    slot_duration_minutes?: number;
+    timezone?: string;
+  }) => post<InvitationCreated>('/admin/invitations', data),
+
+  listInvitations: () => get<Invitation[]>('/admin/invitations'),
+
+  revokeInvitation: (invitationId: string) => del<void>(`/admin/invitations/${invitationId}`),
 
   createLeave: (doctorId: string, data: { leave_date: string; reason?: string }) =>
     post<DoctorLeave>(`/admin/doctors/${doctorId}/leaves`, data),

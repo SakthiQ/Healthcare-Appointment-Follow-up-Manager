@@ -91,7 +91,7 @@ def _book(api, doctor, patient, hour=9):
 
 
 def _break_job_queueing(monkeypatch):
-    """A genuine flush failure (NOT NULL), standing in for any database error at
+    """A genuine flush failure (the "has a recipient" CHECK), standing in for any database error at
     this point, which leaves the session unusable until rollback."""
     def broken_create_job(db, appointment_id, recipient_id, notification_type, payload=None, scheduled_for=None):
         db.add(NotificationJob(

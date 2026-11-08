@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _RETRY_BACKOFF_CAP_MINUTES = 60
 
 # Jobs whose payload carries a secret link, scrubbed from the database once finished.
-_SECRET_TYPES = (NotificationType.PASSWORD_RESET, NotificationType.EMAIL_VERIFICATION)
+_SECRET_TYPES = (NotificationType.PASSWORD_RESET, NotificationType.EMAIL_VERIFICATION, NotificationType.INVITATION)
 
 
 class NotificationService:
@@ -49,25 +49,28 @@ class NotificationService:
         self,
         db: Session,
         appointment_id: Optional[str],
-        recipient_id: str,
+        recipient_id: Optional[str],
         notification_type: NotificationType,
         payload: Optional[dict] = None,
         scheduled_for: Optional[datetime] = None,
+        recipient_email: Optional[str] = None,
     ) -> NotificationJob:
         return notification_repository.create_job(
             db, appointment_id, recipient_id, notification_type,
             payload=json.dumps(payload) if payload else None,
             scheduled_for=scheduled_for,
+            recipient_email=recipient_email,
         )
 
     def queue_notification_no_commit(
         self,
         db: Session,
         appointment_id: Optional[str],
-        recipient_id: str,
+        recipient_id: Optional[str],
         notification_type: NotificationType,
         payload: Optional[dict] = None,
         scheduled_for: Optional[datetime] = None,
+        recipient_email: Optional[str] = None,
     ) -> NotificationJob:
         """Like queue_notification but only flushes — for callers (e.g.
         DoctorLeaveService) that own a larger atomic transaction."""
@@ -75,6 +78,7 @@ class NotificationService:
             db, appointment_id, recipient_id, notification_type,
             payload=json.dumps(payload) if payload else None,
             scheduled_for=scheduled_for,
+            recipient_email=recipient_email,
         )
 
     def supersede_pending_notifications(
@@ -116,9 +120,15 @@ class NotificationService:
             db.refresh(job)
 
     def _process(self, db: Session, job: NotificationJob) -> NotificationJob:
-        recipient = user_repository.get_by_id(db, job.recipient_id)
-        if not recipient:
-            return notification_repository.mark_failed_permanent(db, job, "Recipient user no longer exists.")
+        if job.recipient_id:
+            recipient = user_repository.get_by_id(db, job.recipient_id)
+            if not recipient:
+                return notification_repository.mark_failed_permanent(db, job, "Recipient user no longer exists.")
+            to_email = recipient.email
+        elif job.recipient_email:
+            to_email = job.recipient_email  # someone with no account yet, e.g. an invitee
+        else:
+            return notification_repository.mark_failed_permanent(db, job, "Notification has no recipient.")
 
         try:
             subject, body = self._build_content(db, job)
@@ -128,7 +138,7 @@ class NotificationService:
             )
 
         try:
-            self._provider().send(to_email=recipient.email, subject=subject, body=body)
+            self._provider().send(to_email=to_email, subject=subject, body=body)
         except EmailProviderPermanentError as exc:
             return notification_repository.mark_failed_permanent(db, job, str(exc))
         except Exception as exc:  # noqa: BLE001 - transient provider failure (timeout, unavailable, etc.)
@@ -204,6 +214,21 @@ class NotificationService:
                 "Confirm your email address",
                 f"Please confirm your email address by opening this link within {hours} hours:" + "\n" + link
                 + "\n\nIf you did not create an account, ignore this email.",
+            )
+
+        if job.notification_type == NotificationType.INVITATION:
+            link = payload.get("link")
+            if not link:
+                raise ValueError("Invitation notification has no link.")
+            role_label = "an administrator" if payload.get("role") == "ADMIN" else "a doctor"
+            inviter = payload.get("invited_by") or "An administrator"
+            days = payload.get("expires_days", 7)
+            return (
+                "You are invited to join Healthcare Manager",
+                f"{inviter} has invited you to join as {role_label}." + "\n\n"
+                + f"Open this link within {days} days to create your account. You will choose your own password:" + "\n"
+                + link + "\n\n"
+                + "If you were not expecting this, ignore this email. No account is created until you open the link.",
             )
 
         raise ValueError(f"Unknown notification type: {job.notification_type}")

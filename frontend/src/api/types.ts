@@ -177,6 +177,38 @@ export interface AuditLogEntry {
   detail: string | null;
 }
 
+export type StaffRole = 'DOCTOR' | 'ADMIN';
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: StaffRole;
+  full_name: string | null;
+  specialization: string | null;
+  slot_duration_minutes: number | null;
+  timezone: string | null;
+  status: InvitationStatus;
+  expires_at: string;
+  created_at: string;
+  invited_by: string | null;
+}
+
+export interface InvitationCreated {
+  invitation: Invitation;
+  /** Shown once: only a hash is stored, so it cannot be fetched again. */
+  invite_link: string;
+  email_queued: boolean;
+}
+
+/** What the signup page learns from an invitation link. */
+export interface InvitationLookup {
+  email: string;
+  role: StaffRole;
+  full_name: string | null;
+  expires_at: string;
+}
+
 export interface AuditLogPage {
   items: AuditLogEntry[];
   total: number;
