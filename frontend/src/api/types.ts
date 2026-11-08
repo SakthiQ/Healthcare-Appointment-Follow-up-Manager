@@ -36,6 +36,8 @@ export interface Doctor {
   full_name: string;
   specialization: string;
   slot_duration_minutes: number;
+  /** IANA zone the doctor's working hours and leave dates are written in. */
+  timezone: string;
   is_active: boolean;
   created_at: string;
 }
@@ -74,6 +76,7 @@ export interface SlotGenerationResponse {
   doctor_id: string;
   target_date: string;
   slot_duration_minutes: number;
+  timezone: string;
   total_slots: number;
   available_slots: number;
   slots: SlotItem[];
@@ -103,6 +106,8 @@ export interface Appointment {
   patient_name: string | null;
   doctor_name: string | null;
   doctor_specialization: string | null;
+  /** The doctor's IANA timezone: appointment times are shown in it. */
+  doctor_timezone: string | null;
 }
 
 export interface PreVisitPayload {

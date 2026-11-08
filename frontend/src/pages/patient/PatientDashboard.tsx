@@ -55,9 +55,9 @@ export default function PatientDashboard() {
               {upcoming.slice(0, 5).map((appt) => (
                 <li key={appt.id} className="list-row">
                   <div>
-                    <strong>{formatDateTime(appt.start_time)}</strong>
+                    <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
                     <div className="muted small">
-                      {appt.doctor_name ?? 'Unknown doctor'} · Ends {formatDateTime(appt.end_time)}
+                      {appt.doctor_name ?? 'Unknown doctor'} · Ends {formatDateTime(appt.end_time, appt.doctor_timezone)}
                     </div>
                   </div>
                   <div className="list-row-end">
@@ -79,7 +79,7 @@ export default function PatientDashboard() {
             {conflicted.map((appt) => (
               <li key={appt.id} className="list-row">
                 <div>
-                  <strong>{formatDateTime(appt.start_time)}</strong>
+                  <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
                   <div className="muted small">
                     {appt.doctor_name ?? 'Your doctor'} is unavailable — please choose a new slot.
                   </div>

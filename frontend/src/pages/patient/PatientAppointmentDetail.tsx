@@ -140,7 +140,7 @@ export default function PatientAppointmentDetail() {
       <header className="page-head">
         <div>
           <h1>Appointment details</h1>
-          <p className="muted">{formatDateTime(appt.start_time)}</p>
+          <p className="muted">{formatDateTime(appt.start_time, appt.doctor_timezone)}</p>
         </div>
         <Link className="btn" to="/patient/appointments">
           Back
@@ -173,15 +173,15 @@ export default function PatientAppointmentDetail() {
         </div>
         <div className="summary-row">
           <span>Starts</span>
-          <strong>{formatDateTime(appt.start_time)}</strong>
+          <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
         </div>
         <div className="summary-row">
           <span>Ends</span>
-          <strong>{formatDateTime(appt.end_time)}</strong>
+          <strong>{formatDateTime(appt.end_time, appt.doctor_timezone)}</strong>
         </div>
         <div className="summary-row">
           <span>Booked</span>
-          <span>{formatDateTime(appt.created_at)}</span>
+          <span>{formatDateTime(appt.created_at, appt.doctor_timezone)}</span>
         </div>
 
         <div className="row-actions">
@@ -236,8 +236,8 @@ export default function PatientAppointmentDetail() {
                         disabled={busy}
                         onClick={() => handleReschedule(slot)}
                       >
-                        {formatTime(slot.start_time)}
-                        <span className="slot-end">–{formatTime(slot.end_time)}</span>
+                        {formatTime(slot.start_time, appt.doctor_timezone)}
+                        <span className="slot-end">–{formatTime(slot.end_time, appt.doctor_timezone)}</span>
                       </button>
                     ))}
                   </div>
@@ -333,7 +333,7 @@ export default function PatientAppointmentDetail() {
         message={
           <>
             <p>
-              This will release the slot on {formatDateTime(appt.start_time)} and notify your doctor.
+              This will release the slot on {formatDateTime(appt.start_time, appt.doctor_timezone)} and notify your doctor.
             </p>
             <p className="muted small">This cannot be undone — you'd need to book again.</p>
           </>
