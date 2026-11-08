@@ -222,15 +222,27 @@ stateDiagram-v2
 ## Constraints & Integrity Rules
 
 ### Double-Booking Prevention
-1. **Database Exclusion Constraint / Index:**
-   A partial unique index on `(doctor_id, start_time)` for active appointments:
+1. **Partial unique index** on `(doctor_profile_id, start_time)` for active appointments (same start time):
    ```sql
-   CREATE UNIQUE INDEX idx_unique_doctor_active_slot 
-   ON appointments (doctor_id, start_time) 
-   WHERE status IN ('HELD', 'CONFIRMED');
+   CREATE UNIQUE INDEX uq_doctor_profile_start_time_active
+   ON appointments (doctor_profile_id, start_time)
+   WHERE status IN ('HELD', 'CONFIRMED', 'RESCHEDULED');
    ```
-2. **Explicit Row Locking:**
-   When booking or holding, the transaction acquires a `SELECT ... FOR UPDATE` on the target doctor's working schedule or existing appointments to evaluate conflicts atomically.
+2. **Exclusion constraint** (PostgreSQL, migration `a3c5d7e9f1b2`; needs `btree_gist`) for any overlap, whatever the start times:
+   ```sql
+   ALTER TABLE appointments ADD CONSTRAINT ex_doctor_profile_no_overlap_active
+   EXCLUDE USING gist (doctor_profile_id WITH =, tstzrange(start_time, end_time) WITH &&)
+   WHERE (status IN ('HELD', 'CONFIRMED', 'RESCHEDULED'));
+   ```
+   SQLite (tests, local dev) enforces the same rule with `BEFORE INSERT` / `BEFORE UPDATE` triggers. The migration fails if existing data already has overlapping active appointments for a doctor; cancel or move one of each pair first.
+3. **Explicit Row Locking:**
+   Booking and rescheduling run `SELECT ... FOR UPDATE` on the overlap query and on the appointment being rescheduled or cancelled. This reduces conflict churn but is not relied on for correctness: a free slot returns no rows to lock. Constraints 1 and 2 are the final authority.
+
+### Other tables and columns (added later)
+- `doctors.timezone` (varchar(64), default `'UTC'`): IANA zone the doctor's working hours and leave dates are written in.
+- `users.token_version` (int, default 0): bumped by logout; access tokens carry it and are rejected on mismatch.
+- `login_throttles(key PK, failed_count, window_started_at, locked_until)`: failed-login counters, `key` = SHA-256 of `email|client IP`.
+- `appointment_holds`: partial unique index `uq_active_hold_doctor_start_time` on `(doctor_id, start_time) WHERE is_active`.
 
 ### Doctor Leave Constraint
 - Doctor leave dates prevent slot generation for the full 24-hour day of the leave date.

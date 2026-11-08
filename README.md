@@ -38,7 +38,7 @@ doesn't mean.
 | Auth | JWT (PyJWT) + bcrypt |
 | Background jobs | Two simple polling workers (no broker/queue) |
 | Frontend | React 18 + TypeScript + Vite, React Router, plain `fetch` |
-| Testing | pytest (backend, 148 tests) — see [Running tests](#running-tests) |
+| Testing | pytest (backend, 194 tests) — see [Running tests](#running-tests) |
 
 No microservices, Kafka, Kubernetes, Redis, RAG, or multi-agent frameworks — a modular
 monolith throughout, by design (see `docs/engineering-decisions.md`).
@@ -116,7 +116,7 @@ Summary:
 | Variable | Purpose | Required when |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL (or SQLite) connection string | always |
-| `SECRET_KEY` | JWT signing key | always — **change for any real deployment** |
+| `SECRET_KEY` | JWT signing key | always — **change for any real deployment**; the app refuses to start with the default key when `ENVIRONMENT=production` |
 | `DEMO_MODE` | `True` → Mock AI/Email/Calendar providers, zero external credentials needed | always (default `True`) |
 | `ALLOW_PRIVILEGED_SELF_REGISTRATION` | Gates whether `/auth/register` can create anything but a PATIENT | always — **must stay `False`** outside tests, see [below](#creating-the-first-admin-account) |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allow-list for the frontend origin | always |
@@ -125,6 +125,11 @@ Summary:
 | `SMTP_*`, `EMAIL_FROM_ADDRESS` | SMTP relay for real email | email is real |
 | `GOOGLE_*` | OAuth 2.0 client + refresh token for Calendar API | calendar is real |
 | `NOTIFICATION_MAX_ATTEMPTS`, `CALENDAR_MAX_ATTEMPTS` | Bounded retry counts | optional (sensible defaults) |
+| `RUN_WORKERS_IN_PROCESS`, `WORKER_POLL_INTERVAL_SECONDS` | Run the notification, calendar and hold-expiry workers on threads in the web process | `True` on hosts with no separate worker process (the Render blueprint sets it) |
+| `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES` | Login throttling per (email, IP) | optional (5 / 15) |
+| `AI_MAX_SUMMARIES_PER_APPOINTMENT` | Cap on AI summaries per appointment and type | optional (10) |
+| `AUTH_COOKIE_MODE`, `VITE_AUTH_COOKIES` (frontend build) | Session in an httpOnly cookie instead of `localStorage` | optional; same-site deployments only, see [docs/system-design.md](docs/system-design.md) |
+| `CONSULTATION_EARLY_SUBMIT_MINUTES` | Reject consultations recorded too long before the appointment | optional; unset for the demo flow |
 | `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` | When a job abandoned by a crashed worker goes back in the queue | optional (default 30) |
 | `VITE_API_BASE_URL` | Frontend: backend origin in production (empty = same-origin/dev proxy) | production build |
 
@@ -236,7 +241,7 @@ python -m pytest tests/ -v
 ```
 
 Tests use an isolated in-memory SQLite database (`tests/conftest.py`) — they do not
-touch `DATABASE_URL`. **148 tests, 148 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
+touch `DATABASE_URL`. **194 tests, 194 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
 
 ## Deployment
 
@@ -279,7 +284,7 @@ Each entry gives the reasoning behind it.
 
 All 13 phases in `AGENT_PHASES.md` are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 148/148
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 194/194
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app

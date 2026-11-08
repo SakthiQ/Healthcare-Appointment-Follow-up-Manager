@@ -138,7 +138,7 @@ backend/
 │   ├── env.py
 │   └── versions/                 # 4 migrations: initial_schema, create_domain_models,
 │                                  # add_double_booking_unique_constraint, add_calendar_sync_retry_fields
-└── tests/                        # 148 tests total (see docs/requirement-mapping.md)
+└── tests/                        # 194 tests total (see docs/requirement-mapping.md)
     ├── conftest.py
     ├── test_config.py, test_database.py, test_health.py       # Phase 1
     ├── test_models.py                                          # Phase 2 (+ Phase 6 hardening)
@@ -301,26 +301,36 @@ Background processing uses a simple Python scheduler/worker model (no Celery, no
 
 ```mermaid
 graph LR
-    subgraph "Workers"
+    subgraph "Workers (workers/)"
         NW["Notification Worker"]
-        HW["Hold Expiry Worker"]
-        RW["Reminder Worker"]
+        CW["Calendar Worker"]
     end
 
-    NW -->|"polls PENDING jobs"| DB[("Database")]
-    HW -->|"expires stale holds"| DB
-    RW -->|"generates reminder jobs"| DB
+    NW -->|"claims PENDING jobs"| DB[("Database")]
+    CW -->|"claims PENDING_SYNC rows"| DB
     NW -->|"sends via"| EP["Email Provider"]
+    CW -->|"syncs via"| CP["Calendar Provider"]
 ```
 
 **Worker responsibilities:**
 | Worker | Schedule | Action |
 |--------|----------|--------|
-| Notification Worker | Polls every 30s | Picks up PENDING notification jobs, sends via email provider, updates status |
-| Hold Expiry Worker | Polls every 60s | Finds holds past `expires_at`, marks as inactive, releases slots |
-| Reminder Worker | Polls every 5 min | Checks prescriptions for upcoming medication times, creates notification jobs |
+| Notification Worker | Polls every `WORKER_POLL_INTERVAL_SECONDS` (30s) | Claims due PENDING notification jobs, sends via email provider, updates status; requeues jobs a dead worker left PROCESSING |
+| Calendar Worker | Same | Claims due PENDING_SYNC rows, calls the calendar provider, updates status |
 
-Workers are run as background threads or a separate process alongside the FastAPI app.
+| Hold Expiry Worker | Same (60s when run standalone) | Deactivates holds past `expires_at`. Housekeeping only: every read already ignores expired holds, and a new hold on a slot clears that slot's stale row itself |
+
+There is no separate reminder worker: reminders are scheduled as `NotificationJob` rows
+(with a send time) that the Notification Worker delivers. Reads never write: fetching a hold
+reports it as inactive once expired without changing the row.
+
+**Where the workers run** is a deployment choice:
+- `RUN_WORKERS_IN_PROCESS=True` starts both on daemon threads from the FastAPI lifespan
+  (`workers/runner.py`) and stops them on shutdown. This is what the Render blueprint uses,
+  since that service type has no separate worker process. Safe with several web instances
+  (both claim rows with `FOR UPDATE SKIP LOCKED` on PostgreSQL).
+- `RUN_WORKERS_IN_PROCESS=False` (default) leaves them to separate processes:
+  `python -m workers.notification_worker` / `python -m workers.calendar_worker` / `python -m workers.hold_worker`.
 
 ---
 
@@ -382,6 +392,6 @@ graph TB
 | Frontend | Vercel or similar | Static React build |
 | Backend | Render / Railway | FastAPI with Uvicorn |
 | Database | Managed PostgreSQL | Render / Railway / Supabase |
-| Workers | Same process as backend | Background threads/scheduler |
+| Workers | Same process as backend (`RUN_WORKERS_IN_PROCESS=True`) or separate processes | Background threads, or `python -m workers.*` |
 
 Environment variables manage all configuration. `.env.example` documents required variables.

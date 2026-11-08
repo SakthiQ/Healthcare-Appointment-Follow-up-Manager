@@ -3,7 +3,7 @@
 This replaces the Phase 0 planning draft (`docs/requirement-map.md`, since removed),
 whose endpoint paths and test names never matched what was actually built. Every row
 below cites a real file, a real API path, and a real test that exists in the repository
-today. The full suite (148 tests) passes.
+today. The full suite (194 tests) passes.
 
 Status legend: ✅ Done & tested · ⚠️ Done, but with a caveat (see Notes) · ❌ Not implemented
 

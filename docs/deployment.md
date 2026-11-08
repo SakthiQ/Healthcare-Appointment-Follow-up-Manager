@@ -138,14 +138,58 @@ Full walkthrough (Cloud project, OAuth consent screen, obtaining a refresh token
 
 ## 7. Background workers
 
-`workers/notification_worker.py` and `workers/calendar_worker.py` are standalone
-processes (`python -m workers.notification_worker`, `python -m workers.calendar_worker`),
-not started automatically by the web process — see `docs/architecture.md#background-job-architecture`.
-Most platforms support a second "worker" process type in the same service/repo pointed
-at these entrypoints with the same environment variables as the web process. Without
-them running, notification/calendar jobs still get created and are visible in the
-database, they just won't be *delivered* until a worker process claims them — booking,
-rescheduling, and cancellation all still work correctly (see `docs/failure-handling.md`).
+The notification and calendar workers must run somewhere, or queued emails and calendar
+syncs are created but never *delivered* (booking, rescheduling and cancellation still work
+correctly either way — see `docs/failure-handling.md`). There are two ways to run them:
+
+- **In the web process (default for the Render blueprint).** Set `RUN_WORKERS_IN_PROCESS=True`
+  (`render.yaml` already does). The app's startup hook starts the notification, calendar and hold-expiry workers on background
+  threads and stops them on shutdown; `WORKER_POLL_INTERVAL_SECONDS` (default 30) sets the
+  polling rate. Safe with several web instances: the notification and calendar workers claim rows with
+  `FOR UPDATE SKIP LOCKED` on PostgreSQL. Needs no paid "worker" service type.
+- **As separate processes.** Leave the flag `False` and run `python -m workers.notification_worker`,
+  `python -m workers.calendar_worker` and `python -m workers.hold_worker`, each with the same environment variables as the web
+  process, on a platform that offers a second process type. See
+  `docs/architecture.md#background-job-architecture`.
+
+Do not enable both, or the work is simply claimed by whichever polls first.
+
+## Verifying the PostgreSQL-only behaviour
+
+The test suite runs on SQLite, which has no row locks, exclusion constraints or real
+concurrency. `backend/scripts/verify_postgres.py` proves those parts on a real server: every
+migration applies, overlapping appointments are rejected by the database, 12 concurrent bookings
+and 12 concurrent holds each produce exactly one winner, and a leave cannot interleave with a
+booking (it also runs the same race with the lock disabled, to show the check can fail).
+
+```bash
+cd backend
+VERIFY_PG_URL=postgresql://user:pass@host/scratch_db VERIFY_PG_WIPE=yes python scripts/verify_postgres.py
+```
+
+**It drops and recreates the `public` schema of that database.** Point it at an empty scratch
+database or a throwaway branch (a Neon branch is ideal), never your real one. It refuses to run
+without `VERIFY_PG_WIPE=yes`, exits non-zero on any failure, and reports whether it could test
+the full `btree_gist` exclusion constraint (Neon, Supabase and Render Postgres can).
+
+`DATABASE_URL` values starting `postgres://` or `postgresql://` are rewritten to
+`postgresql+psycopg2://`. SQLAlchemy 2.1 treats a bare `postgresql://` as the `psycopg` (v3)
+driver, which is not installed, so without this a fresh install crashes at startup.
+
+## Security settings
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SECRET_KEY` | dev key | The app refuses to start with the default key when `ENVIRONMENT=production` |
+| `LOGIN_MAX_FAILED_ATTEMPTS` / `LOGIN_LOCKOUT_MINUTES` | 5 / 15 | Failed logins per (email, IP) before a 429 lockout |
+| `AI_MAX_SUMMARIES_PER_APPOINTMENT` | 10 | Cap on AI summaries per appointment and type |
+| `AUTH_COOKIE_MODE` (+ `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`) | off | Keep the session in an httpOnly cookie instead of `localStorage`. Needs the app and API on the same site, and the frontend built with `VITE_AUTH_COOKIES=true`. Leave off for a cross-site Vercel + Render setup |
+| `CONSULTATION_EARLY_SUBMIT_MINUTES` | unset | Reject consultations recorded earlier than this before the appointment. Unset keeps the demo flow working |
+
+Behind a proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips='*'` (already in `render.yaml`)
+so the login throttle sees real client IPs. Only do this when the app is reachable solely through that proxy.
+`frontend/vercel.json` sets a Content-Security-Policy and other security headers; if you add a third-party
+script or an API on another scheme, update its `script-src` / `connect-src`.
 
 ## 8. Verifying a hosted deployment
 
