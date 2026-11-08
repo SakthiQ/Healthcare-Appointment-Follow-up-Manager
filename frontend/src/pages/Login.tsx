@@ -1,7 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { api, ApiError } from '../api/client';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
-import { ErrorBanner, Field } from '../components/ui';
+import { ErrorBanner, Field, SuccessBanner } from '../components/ui';
 
 export default function Login() {
   const { user, login, loading } = useAuth();
@@ -13,6 +14,7 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resendNote, setResendNote] = useState<string | null>(null);
 
   if (!loading && user) return <Navigate to={homePathForRole(user.role)} replace />;
 
@@ -25,9 +27,23 @@ export default function Login() {
     return Object.keys(errs).length === 0;
   }
 
+  // Sign-in is refused (403) until the email is verified, when the API is set to require it.
+  const needsVerification = error instanceof ApiError && error.status === 403;
+
+  async function handleResend() {
+    setResendNote(null);
+    try {
+      const result = await api.resendVerification(email.trim());
+      setResendNote(result.message);
+    } catch (err) {
+      setError(err);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setResendNote(null);
     if (!validate()) return;
 
     setSubmitting(true);
@@ -49,6 +65,12 @@ export default function Login() {
         <p className="muted">Patients, doctors and administrators all sign in here.</p>
 
         <ErrorBanner error={error} />
+        {needsVerification ? (
+          <button type="button" className="btn btn-block" onClick={handleResend} disabled={!email.trim()}>
+            Send me a new verification email
+          </button>
+        ) : null}
+        {resendNote ? <SuccessBanner>{resendNote}</SuccessBanner> : null}
 
         <form onSubmit={handleSubmit} noValidate>
           <Field label="Email" htmlFor="email" error={fieldErrors.email}>
@@ -78,6 +100,9 @@ export default function Login() {
           </button>
         </form>
 
+        <p className="auth-alt">
+          <Link to="/forgot-password">Forgot your password?</Link>
+        </p>
         <p className="auth-alt">
           New patient? <Link to="/register">Create an account</Link>
         </p>

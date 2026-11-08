@@ -11,8 +11,15 @@ from scripts.create_admin import CreateAdminError, create_admin
 
 def test_postgres_scheme_normalized_for_sqlalchemy():
     s = Settings(DATABASE_URL="postgres://u:p@host:5432/db?sslmode=require")
-    assert s.DATABASE_URL == "postgresql://u:p@host:5432/db?sslmode=require"
-    assert Settings(DATABASE_URL="postgresql://u:p@host/db").DATABASE_URL == "postgresql://u:p@host/db"
+    assert s.DATABASE_URL == "postgresql+psycopg2://u:p@host:5432/db?sslmode=require"
+    assert Settings(DATABASE_URL="postgresql://u:p@host/db").DATABASE_URL == "postgresql+psycopg2://u:p@host/db"
+
+
+def test_database_driver_is_named_explicitly_and_other_urls_are_left_alone():
+    """A bare postgresql:// is psycopg2 on SQLAlchemy 2.0 but psycopg (v3) on 2.1, which
+    is not installed; an explicit driver or a non-Postgres URL must pass through."""
+    assert Settings(DATABASE_URL="postgresql+psycopg://u@h/d").DATABASE_URL == "postgresql+psycopg://u@h/d"
+    assert Settings(DATABASE_URL="sqlite:///./x.db").DATABASE_URL == "sqlite:///./x.db"
 
 
 def _preflight(client, origin):

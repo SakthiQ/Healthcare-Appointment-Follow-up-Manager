@@ -1,5 +1,7 @@
 from typing import Optional, List
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.exceptions import ConflictError
 from models.clinical import (
     SymptomReport,
     AISummary,
@@ -23,7 +25,15 @@ class ClinicalRepository:
         else:
             report = SymptomReport(appointment_id=appointment_id, symptoms=symptoms)
             db.add(report)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Two first submissions raced; appointment_id is unique, so the other
+            # one won. Fall back to updating its row rather than failing with a 500.
+            db.rollback()
+            report = self.get_symptom_report(db, appointment_id)
+            report.symptoms = symptoms
+            db.commit()
         db.refresh(report)
         return report
 
@@ -49,6 +59,13 @@ class ClinicalRepository:
         db.refresh(summary)
         return summary
 
+    def count_ai_summaries(self, db: Session, appointment_id: str, summary_type: AISummaryType) -> int:
+        return (
+            db.query(AISummary)
+            .filter(AISummary.appointment_id == appointment_id, AISummary.type == summary_type)
+            .count()
+        )
+
     def get_latest_ai_summary(
         self, db: Session, appointment_id: str, summary_type: AISummaryType
     ) -> Optional[AISummary]:
@@ -71,24 +88,31 @@ class ClinicalRepository:
         prescription_instructions: Optional[str],
         medications: List[dict],
     ) -> Consultation:
-        consultation = Consultation(appointment_id=appointment_id, notes=notes)
-        db.add(consultation)
-        db.flush()  # assign consultation.id without committing yet
+        try:
+            consultation = Consultation(appointment_id=appointment_id, notes=notes)
+            db.add(consultation)
+            db.flush()  # assign consultation.id without committing yet
 
-        prescription = Prescription(consultation_id=consultation.id, instructions=prescription_instructions)
-        db.add(prescription)
-        db.flush()
+            prescription = Prescription(consultation_id=consultation.id, instructions=prescription_instructions)
+            db.add(prescription)
+            db.flush()
 
-        for med in medications:
-            db.add(Medication(
-                prescription_id=prescription.id,
-                name=med["name"],
-                dosage=med["dosage"],
-                frequency=med["frequency"],
-                duration_days=med.get("duration_days"),
-            ))
+            for med in medications:
+                db.add(Medication(
+                    prescription_id=prescription.id,
+                    name=med["name"],
+                    dosage=med["dosage"],
+                    frequency=med["frequency"],
+                    duration_days=med.get("duration_days"),
+                ))
 
-        db.commit()
+            db.commit()
+        except IntegrityError:
+            # consultations.appointment_id is unique: a concurrent submission won. The
+            # violation can surface at any of the flushes above, not only the commit.
+            # Roll back so the appointment's COMPLETED flip is undone too.
+            db.rollback()
+            raise ConflictError("A consultation has already been submitted for this appointment.")
         db.refresh(consultation)
         return consultation
 

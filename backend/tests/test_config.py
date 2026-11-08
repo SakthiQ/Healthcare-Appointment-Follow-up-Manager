@@ -53,3 +53,20 @@ def test_provider_factories_respect_per_integration_switches(monkeypatch):
 
     monkeypatch.setattr(settings, "AI_DEMO_MODE", None)
     assert isinstance(get_ai_provider(), MockAIProvider)
+
+
+def test_default_secret_key_is_refused_in_production():
+    import pytest
+    from pydantic import ValidationError
+    from app.config import DEFAULT_SECRET_KEY
+
+    for env in ("production", "Production", " prod "):
+        with pytest.raises(ValidationError, match="SECRET_KEY"):
+            Settings(ENVIRONMENT=env, SECRET_KEY=DEFAULT_SECRET_KEY)
+
+
+def test_default_secret_key_still_allowed_outside_production_and_custom_key_allowed_in_it():
+    from app.config import DEFAULT_SECRET_KEY
+
+    assert Settings(ENVIRONMENT="development", SECRET_KEY=DEFAULT_SECRET_KEY).SECRET_KEY == DEFAULT_SECRET_KEY
+    assert Settings(ENVIRONMENT="production", SECRET_KEY="x" * 48).SECRET_KEY == "x" * 48

@@ -8,6 +8,10 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  /** Signs this user's other sessions out; this one carries on with a fresh token. */
+  changePassword: (current: string, next: string) => Promise<void>;
+  /** Re-reads the signed-in user (e.g. after their email is verified). */
+  refreshUser: () => Promise<void>;
   hasRole: (...roles: UserRole[]) => boolean;
 }
 
@@ -57,8 +61,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Revoke the token on the server so a copied one stops working too. Best effort:
+    // the local sign-out below must happen even if the request fails or is offline.
+    if (getToken()) void api.logout().catch(() => undefined);
     clearToken();
     setUser(null);
+  }, []);
+
+  const changePassword = useCallback(async (current: string, next: string) => {
+    const result = await api.changePassword({ current_password: current, new_password: next });
+    setToken(result.access_token);
+    setUser(result.user);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    setUser(await api.me());
   }, []);
 
   const hasRole = useCallback(
@@ -67,8 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, hasRole }),
-    [user, loading, login, logout, hasRole],
+    () => ({ user, loading, login, logout, changePassword, refreshUser, hasRole }),
+    [user, loading, login, logout, changePassword, refreshUser, hasRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

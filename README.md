@@ -36,9 +36,9 @@ doesn't mean.
 | ORM / Migrations | SQLAlchemy + Alembic |
 | Validation | Pydantic |
 | Auth | JWT (PyJWT) + bcrypt |
-| Background jobs | Two simple polling workers (no broker/queue) |
+| Background jobs | Four simple polling workers: notifications, calendar, hold expiry, housekeeping (no broker/queue) |
 | Frontend | React 18 + TypeScript + Vite, React Router, plain `fetch` |
-| Testing | pytest (backend, 148 tests) — see [Running tests](#running-tests) |
+| Testing | pytest (backend) and Vitest + Testing Library (frontend), run by CI — see [Running tests](#running-tests) |
 
 No microservices, Kafka, Kubernetes, Redis, RAG, or multi-agent frameworks — a modular
 monolith throughout, by design (see `docs/engineering-decisions.md`).
@@ -116,7 +116,7 @@ Summary:
 | Variable | Purpose | Required when |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL (or SQLite) connection string | always |
-| `SECRET_KEY` | JWT signing key | always — **change for any real deployment** |
+| `SECRET_KEY` | JWT signing key | always — **change for any real deployment**; the app refuses to start with the default key when `ENVIRONMENT=production` |
 | `DEMO_MODE` | `True` → Mock AI/Email/Calendar providers, zero external credentials needed | always (default `True`) |
 | `ALLOW_PRIVILEGED_SELF_REGISTRATION` | Gates whether `/auth/register` can create anything but a PATIENT | always — **must stay `False`** outside tests, see [below](#creating-the-first-admin-account) |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allow-list for the frontend origin | always |
@@ -125,6 +125,15 @@ Summary:
 | `SMTP_*`, `EMAIL_FROM_ADDRESS` | SMTP relay for real email | email is real |
 | `GOOGLE_*` | OAuth 2.0 client + refresh token for Calendar API | calendar is real |
 | `NOTIFICATION_MAX_ATTEMPTS`, `CALENDAR_MAX_ATTEMPTS` | Bounded retry counts | optional (sensible defaults) |
+| `RUN_WORKERS_IN_PROCESS`, `WORKER_POLL_INTERVAL_SECONDS` | Run the notification, calendar, hold-expiry and housekeeping workers on threads in the web process | `True` on hosts with no separate worker process (the Render blueprint sets it) |
+| `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES` | Login throttling per (email, IP) | optional (5 / 15) |
+| `AI_MAX_SUMMARIES_PER_APPOINTMENT` | Cap on AI summaries per appointment and type | optional (10) |
+| `RATE_LIMITING_ENABLED`, `REGISTER_RATE_LIMIT_PER_HOUR`, `AI_RATE_LIMIT_PER_HOUR`, `PASSWORD_RESET_RATE_LIMIT_PER_HOUR`, `PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR`, `AUTH_TOKEN_RATE_LIMIT_PER_HOUR`, `CHANGE_PASSWORD_RATE_LIMIT_PER_HOUR` | Request limits (fixed one-hour windows, kept in the database) | optional (10 / 30 / 5 / 3 / 30 / 10 per hour) |
+| `FRONTEND_BASE_URL` | Origin the password-reset and email-verification links point at | **production** (default is `http://localhost:5173`) |
+| `REQUIRE_EMAIL_VERIFICATION` | Refuse login until the email address is verified | optional (default `False`, so the demo flow works) |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES`, `EMAIL_VERIFICATION_TOKEN_TTL_HOURS` | How long the emailed links work | optional (30 min / 24 h) |
+| `AUTH_COOKIE_MODE`, `VITE_AUTH_COOKIES` (frontend build) | Session in an httpOnly cookie instead of `localStorage` | optional; same-site deployments only, see [docs/system-design.md](docs/system-design.md) |
+| `CONSULTATION_EARLY_SUBMIT_MINUTES` | Reject consultations recorded too long before the appointment | optional; unset for the demo flow |
 | `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` | When a job abandoned by a crashed worker goes back in the queue | optional (default 30) |
 | `VITE_API_BASE_URL` | Frontend: backend origin in production (empty = same-origin/dev proxy) | production build |
 
@@ -178,20 +187,21 @@ schemas — always in sync with the code, unlike a hand-maintained list. The ful
 
 | Area | Base path | Notes |
 |---|---|---|
-| Auth | `/api/v1/auth` | register (patient-only, see above), login, `me` |
+| Auth | `/api/v1/auth` | register (patient-only, see above; rate-limited), login (throttled), logout, `me`, change-password, forgot-password, reset-password, verify-email, resend-verification |
 | Doctors (public) | `/api/v1/doctors` | search, profile, schedule, leaves, slots |
 | Slots & holds | `/api/v1/slots` | create/get/release a hold |
 | Appointments | `/api/v1/appointments` | book, list, get, reschedule, cancel |
 | AI & clinical | `/api/v1/appointments/{id}/...` | symptom-report, consultation, pre/post-visit AI summaries |
-| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave |
+| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, audit log (`GET /admin/audit-logs`) |
 
 ## Database schema
 
 Full ERD, state machines, and constraints in `docs/database-design.md`. Core entities:
 `User`, `Doctor` (+ `DoctorWorkingHours`, `DoctorLeave`), `Appointment` (+
 `AppointmentHold`), `SymptomReport`, `AISummary`, `Consultation` (+ `Prescription`,
-`Medication`), `NotificationJob`, `CalendarEvent`. Schema is entirely migration-driven —
-4 Alembic revisions in `backend/alembic/versions/`, verified to apply cleanly from an
+`Medication`), `NotificationJob`, `CalendarEvent`, plus `AuthToken` (password-reset and
+verification links), `AuditLog`, `RateLimit` and `LoginThrottle`. Schema is entirely migration-driven —
+8 Alembic revisions in `backend/alembic/versions/`, verified to apply cleanly from an
 empty database (see [Running tests](#running-tests)).
 
 The appointment state machine: `HELD → CONFIRMED → {RESCHEDULED, CANCELLED,
@@ -229,14 +239,31 @@ or fails a booking.
 ## Running tests
 
 ```bash
+# Backend
 cd backend
-pip install -r requirements.txt
-alembic upgrade head              # or let tests create their own in-memory DB — see below
+pip install -r requirements.txt -c constraints.txt   # exact, tested versions; see docs/deployment.md
 python -m pytest tests/ -v
+
+# Frontend
+cd frontend
+npm ci
+npm run typecheck && npm test && npm run build
 ```
 
-Tests use an isolated in-memory SQLite database (`tests/conftest.py`) — they do not
-touch `DATABASE_URL`. **148 tests, 148 passing** on the last full run. Frontend: `cd frontend && npm run typecheck && npm run build`.
+Backend tests use an isolated in-memory SQLite database (`tests/conftest.py`), not
+`DATABASE_URL`. **231 backend tests and 91 frontend tests, all passing** on the last
+full run.
+
+SQLite has no row locks, exclusion constraints or real concurrency, so the PostgreSQL-only
+guarantees (overlap constraint, one winner under concurrent bookings, leave vs. booking
+locking, the rate limiter under concurrency) are proven by a separate script against a real
+server: `python backend/scripts/verify_postgres.py` (it wipes the database you point it at;
+see `docs/deployment.md`). **CI** (`.github/workflows/ci.yml`) runs the backend tests, that
+script against a PostgreSQL service container, and the frontend typecheck, tests and build on
+every push and pull request.
+
+> **Windows note:** if the checkout path contains `&`, `npm run` fails. Call the tools
+> directly: `node node_modules/vitest/vitest.mjs run`, `node node_modules/typescript/bin/tsc --noEmit`.
 
 ## Deployment
 
@@ -261,8 +288,10 @@ Each entry gives the reasoning behind it.
   (`ALLOW_PRIVILEGED_SELF_REGISTRATION`, see above). Regression test:
   `tests/test_auth.py::test_privileged_self_registration_rejected_by_default`.
 - **The 100-thread concurrency test doesn't prove true multi-connection safety** —
-  SQLite forces serialization in-process. The independent, dialect-agnostic proof is the
-  database unique-index test, which has also never run against live PostgreSQL.
+  SQLite forces serialization in-process. The real proof is `backend/scripts/verify_postgres.py`
+  (concurrent bookings and holds, the overlap constraint, leave-vs-booking locking), which
+  passed against a real PostgreSQL. One part, the per-doctor `btree_gist` constraint, needs a
+  server with that extension; CI's PostgreSQL job exercises it.
 - **A test-infrastructure bug**: the shared test-DB session doesn't fully roll back
   between tests when a test performs multiple commits, so committed rows can leak
   across tests. Attempted fix (SQLAlchemy SAVEPOINT pattern) broke the concurrency test
@@ -270,16 +299,22 @@ Each entry gives the reasoning behind it.
 - **No way to retry a `FAILED` notification job** — once a job exhausts its retries
   it stays `FAILED`; an operator must reset `status`/`attempts` in the database by hand
   (no admin endpoint exists). See `docs/failure-handling.md`.
-- **Doctor-leave conflicts don't sync to the calendar** — Phase 10's stated scope was
-  create/update/delete on booking/reschedule/cancellation only.
-- No automated frontend test suite (not required by the phase spec; verification was
-  manual-but-real, driving an actual browser against a live backend).
+- **The audit log is best-effort and has no retention policy.** A failed audit write is
+  logged at ERROR and the request carries on (so an audit-table problem cannot take patient
+  care offline); the application never updates or deletes entries, but how long to keep them
+  is a policy decision the code does not make.
+- **Email verification is not enforced by default** (`REQUIRE_EMAIL_VERIFICATION=False`) so
+  the demo flow works; real password-reset and verification emails need real SMTP. In demo
+  mode the links appear in the logs only at `LOG_LEVEL=DEBUG`.
+- **Frontend tests cover the API client, auth context, layout, routing, login, the account
+  flows and the audit log**; the booking and consultation pages have no component tests (they
+  were verified by hand in a real browser).
 
 ## Project status
 
 All 13 phases in `AGENT_PHASES.md` are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 148/148
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 231/231
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app

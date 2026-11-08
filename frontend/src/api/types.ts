@@ -20,6 +20,8 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  /** False until the user follows the link emailed to them. */
+  email_verified: boolean;
   created_at: string;
 }
 
@@ -36,6 +38,8 @@ export interface Doctor {
   full_name: string;
   specialization: string;
   slot_duration_minutes: number;
+  /** IANA zone the doctor's working hours and leave dates are written in. */
+  timezone: string;
   is_active: boolean;
   created_at: string;
 }
@@ -74,6 +78,7 @@ export interface SlotGenerationResponse {
   doctor_id: string;
   target_date: string;
   slot_duration_minutes: number;
+  timezone: string;
   total_slots: number;
   available_slots: number;
   slots: SlotItem[];
@@ -103,6 +108,8 @@ export interface Appointment {
   patient_name: string | null;
   doctor_name: string | null;
   doctor_specialization: string | null;
+  /** The doctor's IANA timezone: appointment times are shown in it. */
+  doctor_timezone: string | null;
 }
 
 export interface PreVisitPayload {
@@ -151,4 +158,28 @@ export interface Consultation {
   notes: string;
   created_at: string;
   medications: MedicationResponse[];
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  actor_role: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  patient_id: string | null;
+  ip: string | null;
+  detail: string | null;
+}
+
+export interface AuditLogPage {
+  items: AuditLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
 }

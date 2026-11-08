@@ -4,6 +4,7 @@ never block or invalidate appointment logic (see docs/system-design.md)."""
 import abc
 import logging
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 
 from app.config import settings
@@ -39,6 +40,9 @@ class MockEmailProvider(EmailProvider):
     def send(self, to_email: str, subject: str, body: str) -> None:
         self.sent_emails.append({"to": to_email, "subject": subject, "body": body})
         logger.info("MockEmailProvider: would send to=%s subject=%r", to_email, subject)
+        # The body can hold a one-time link, so it is only logged at DEBUG (set LOG_LEVEL=DEBUG
+        # locally to follow a password-reset or verification link in demo mode).
+        logger.debug("MockEmailProvider body to=%s: %s", to_email, body)
 
 
 class RealEmailProvider(EmailProvider):
@@ -64,7 +68,10 @@ class RealEmailProvider(EmailProvider):
         try:
             with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
                 if self._use_tls:
-                    smtp.starttls()
+                    # An explicit default context verifies the server certificate and
+                    # hostname. smtplib's own default does not, which would let anyone
+                    # on the path read the login and the email by answering STARTTLS.
+                    smtp.starttls(context=ssl.create_default_context())
                 if self._username and self._password:
                     smtp.login(self._username, self._password)
                 smtp.sendmail(self._from_address, [to_email], message.as_string())

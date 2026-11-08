@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
+import { COMMON_TIMEZONES, isValidTimeZone } from '../../lib/format';
 import { useAsync } from '../../lib/useAsync';
 import { Badge, Card, EmptyState, ErrorBanner, Field, Spinner, SuccessBanner } from '../../components/ui';
 
@@ -13,6 +14,7 @@ export default function DoctorManagement() {
   const [password, setPassword] = useState('');
   const [specialization, setSpecialization] = useState('');
   const [slotDuration, setSlotDuration] = useState(30);
+  const [timezone, setTimezone] = useState('UTC');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,6 +26,7 @@ export default function DoctorManagement() {
     setPassword('');
     setSpecialization('');
     setSlotDuration(30);
+    setTimezone('UTC');
     setFieldErrors({});
     setSubmitError(null);
   }
@@ -36,6 +39,8 @@ export default function DoctorManagement() {
     if (specialization.trim().length < 2) errs.specialization = 'Specialisation is required.';
     if (slotDuration < 5 || slotDuration > 240)
       errs.slotDuration = 'Slot duration must be between 5 and 240 minutes.';
+    if (!isValidTimeZone(timezone.trim() || 'UTC'))
+      errs.timezone = 'Enter a valid timezone, e.g. Asia/Kolkata.';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -54,6 +59,7 @@ export default function DoctorManagement() {
         full_name: fullName.trim(),
         specialization: specialization.trim(),
         slot_duration_minutes: slotDuration,
+        timezone: timezone.trim() || 'UTC',
       });
       setNotice(`Created ${created.full_name}. Configure their working hours next.`);
       resetForm();
@@ -149,6 +155,25 @@ export default function DoctorManagement() {
                   onChange={(e) => setSlotDuration(Number(e.target.value))}
                   disabled={submitting}
                 />
+              </Field>
+              <Field
+                label="Timezone"
+                htmlFor="timezone"
+                error={fieldErrors.timezone}
+                hint="The timezone this doctor's working hours and leave dates are in (IANA name, e.g. Asia/Kolkata)."
+              >
+                <input
+                  id="timezone"
+                  list="timezone-options"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  disabled={submitting}
+                />
+                <datalist id="timezone-options">
+                  {COMMON_TIMEZONES.map((zone) => (
+                    <option key={zone} value={zone} />
+                  ))}
+                </datalist>
               </Field>
             </div>
             <button type="submit" className="btn btn-primary" disabled={submitting}>

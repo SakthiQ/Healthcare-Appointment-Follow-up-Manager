@@ -1,6 +1,13 @@
 from datetime import date, time, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from app.core.datetime_utils import is_valid_timezone
+
+
+def _check_timezone(value: Optional[str]) -> Optional[str]:
+    if value is not None and not is_valid_timezone(value):
+        raise ValueError("Unknown timezone. Use an IANA name such as 'Asia/Kolkata' or 'America/New_York'.")
+    return value
 
 
 class DoctorCreateRequest(BaseModel):
@@ -9,12 +16,18 @@ class DoctorCreateRequest(BaseModel):
     full_name: str = Field(..., min_length=2)
     specialization: str = Field(..., min_length=2)
     slot_duration_minutes: int = Field(default=30, ge=5, le=240)
+    timezone: str = Field(default="UTC", max_length=64, description="IANA timezone the working hours are written in")
+
+    _validate_timezone = field_validator("timezone")(_check_timezone)
 
 
 class DoctorUpdateRequest(BaseModel):
     specialization: Optional[str] = Field(default=None, min_length=2)
     slot_duration_minutes: Optional[int] = Field(default=None, ge=5, le=240)
     is_active: Optional[bool] = None
+    timezone: Optional[str] = Field(default=None, max_length=64)
+
+    _validate_timezone = field_validator("timezone")(_check_timezone)
 
 
 class DoctorResponse(BaseModel):
@@ -26,6 +39,7 @@ class DoctorResponse(BaseModel):
     full_name: str
     specialization: str
     slot_duration_minutes: int
+    timezone: str = "UTC"
     is_active: bool
     created_at: datetime
 

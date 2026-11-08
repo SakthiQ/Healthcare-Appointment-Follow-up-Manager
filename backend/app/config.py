@@ -1,11 +1,16 @@
 import os
 import re
 from typing import Optional
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
     from pydantic import BaseSettings  # type: ignore
+
+
+# The well-known development signing key. Anyone can read it in the repo, so a
+# production deployment that still uses it lets anyone forge any user's token.
+DEFAULT_SECRET_KEY = "dev-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
@@ -29,9 +34,55 @@ class Settings(BaseSettings):
     
     DATABASE_URL: str = "sqlite:///./healthcare_dev.db"
     
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Cookie sessions (opt-in). Off: the access token is returned in the login response
+    # and sent as a Bearer header, which the frontend keeps in localStorage, where any
+    # script injected into the page can read it. On: the token travels only in an
+    # httpOnly cookie that scripts cannot read, and the login response body carries no
+    # token. Needs the frontend and the API on the SAME SITE (e.g. app.example.com and
+    # api.example.com) so a SameSite cookie is sent; the frontend must be built with
+    # VITE_AUTH_COOKIES=true. Bearer tokens keep working either way (API clients, tests).
+    AUTH_COOKIE_MODE: bool = False
+    AUTH_COOKIE_NAME: str = "healthcare_session"
+    AUTH_COOKIE_SECURE: bool = True      # set False only for plain-http local development
+    AUTH_COOKIE_SAMESITE: str = "lax"    # "lax" or "strict"
+
+    # Login throttling, per (email, client IP): after this many consecutive failures
+    # the pair is locked out (HTTP 429) for LOGIN_LOCKOUT_MINUTES. Keyed on the IP as
+    # well as the email so a stranger can't lock a real user out of their own account.
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+
+    # Cap on AI summaries generated per appointment and type (successes and
+    # failures both count), so repeated clicks can't run up the LLM bill.
+    AI_MAX_SUMMARIES_PER_APPOINTMENT: int = 10
+
+    # Request rate limits (fixed one-hour windows, stored in the database so they hold
+    # across instances). Disabled in the test suite via RATE_LIMITING_ENABLED=False.
+    RATE_LIMITING_ENABLED: bool = True
+    REGISTER_RATE_LIMIT_PER_HOUR: int = 10              # per client IP
+    PASSWORD_RESET_RATE_LIMIT_PER_HOUR: int = 5         # forgot-password / resend, per client IP
+    PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR: int = 3   # ...and per target email, so an inbox can't be flooded
+    AUTH_TOKEN_RATE_LIMIT_PER_HOUR: int = 30            # reset-password / verify-email submissions, per IP
+    CHANGE_PASSWORD_RATE_LIMIT_PER_HOUR: int = 10       # per signed-in user
+    AI_RATE_LIMIT_PER_HOUR: int = 30                    # AI summary generations, per signed-in user
+
+    # Account emails (password reset, email verification). Links point at the frontend.
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_TOKEN_TTL_MINUTES: int = 30
+    EMAIL_VERIFICATION_TOKEN_TTL_HOURS: int = 24
+    # When True, login is refused until the user has verified their email address.
+    # Off by default so the demo flow (register, then use the app) keeps working.
+    REQUIRE_EMAIL_VERIFICATION: bool = False
+
+    # When set, a doctor cannot record a consultation (which marks the appointment
+    # COMPLETED and schedules medication reminders) more than this many minutes before
+    # the appointment starts. Unset = no check, which the demo flow needs: it books a
+    # future slot and consults straight away. A real clinic should set it (e.g. 15).
+    CONSULTATION_EARLY_SUBMIT_MINUTES: Optional[int] = None
 
     # LLM provider (used only when AI demo mode is off, i.e. AI_DEMO_MODE=False or, if
     # that is unset, DEMO_MODE=False; MockAIProvider requires none of this)
@@ -70,6 +121,13 @@ class Settings(BaseSettings):
 
     CALENDAR_MAX_ATTEMPTS: int = 5
 
+    # Run the notification and calendar workers on background threads inside the
+    # web process. Off by default (tests, local dev, and deployments that run
+    # `python -m workers.<name>` as separate processes); the Render blueprint
+    # turns it on because that service type has no separate worker process.
+    RUN_WORKERS_IN_PROCESS: bool = False
+    WORKER_POLL_INTERVAL_SECONDS: float = 30.0
+
     # SECURITY: self-registration through POST /auth/register must only ever
     # create PATIENT accounts by default — DOCTOR accounts are created by an
     # admin (POST /admin/doctors) and ADMIN accounts have no legitimate
@@ -94,8 +152,23 @@ class Settings(BaseSettings):
         # Several hosts (Render, Heroku) hand out "postgres://" URLs, a scheme
         # SQLAlchemy 2.x no longer accepts.
         if value.startswith("postgres://"):
-            return "postgresql://" + value[len("postgres://"):]
+            value = "postgresql://" + value[len("postgres://"):]
+        # Name the driver. A bare "postgresql://" means psycopg2 on SQLAlchemy 2.0 but
+        # psycopg (v3) on 2.1, and requirements.txt allows both versions while shipping
+        # only psycopg2, so a fresh install would otherwise crash at startup.
+        if value.startswith("postgresql://"):
+            value = "postgresql+psycopg2://" + value[len("postgresql://"):]
         return value
+
+    @model_validator(mode="after")
+    def _refuse_default_secret_key_in_production(self):
+        # Fail at startup rather than quietly run with a publicly known JWT key.
+        if self.ENVIRONMENT.strip().lower() in ("production", "prod") and self.SECRET_KEY == DEFAULT_SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY is still the built-in development key while ENVIRONMENT=production. "
+                "Set SECRET_KEY to a long random value (e.g. `python -c \"import secrets; print(secrets.token_urlsafe(48))\"`)."
+            )
+        return self
 
     @field_validator("AI_DEMO_MODE", "EMAIL_DEMO_MODE", "CALENDAR_DEMO_MODE", mode="before")
     @classmethod

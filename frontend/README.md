@@ -86,3 +86,12 @@ summary, since the symptom report and AI summary are both keyed to an
 appointment id. If the AI step fails, the booking is still shown as confirmed —
 it already is, server-side — with a note that the summary can be generated
 later.
+
+## Tests
+
+```bash
+npm test                 # Vitest + Testing Library (jsdom)
+npm run typecheck
+```
+
+Tests sit next to the code (`*.test.ts[x]`). They cover the API client (Bearer vs. cookie mode, error handling, expired sessions), the auth context, routing, the layout, login, the account flows (forgot and reset password, email verification, change password) and the audit log. On Windows with `&` in the checkout path, run `node node_modules/vitest/vitest.mjs run` instead of `npm test`.

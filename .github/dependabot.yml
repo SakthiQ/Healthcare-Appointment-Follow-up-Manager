@@ -1,0 +1,23 @@
+# Weekly update pull requests. CI runs on each, so a bump that breaks something is visible
+# before it is merged, instead of at the next deploy.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Backend: Dependabot cannot see constraints.txt (it only tracks requirements*.txt), so the
+  # backend pins are refreshed by hand with `python scripts/refresh_constraints.py`. This
+  # entry still bumps the ranges in requirements.txt.
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -17,6 +17,10 @@ from app.database import Base, get_db
 # stay False in any real deployment — see AuthService.register_user.
 settings.ALLOW_PRIVILEGED_SELF_REGISTRATION = True
 
+# Test-only: many tests register dozens of users from one address ("testclient"). The limiter has
+# its own tests, which switch it back on with monkeypatch.
+settings.RATE_LIMITING_ENABLED = False
+
 from sqlalchemy.pool import StaticPool
 
 # Use in-memory SQLite for testing

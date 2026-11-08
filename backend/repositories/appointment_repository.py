@@ -13,7 +13,9 @@ class AppointmentRepository:
     ) -> Optional[Appointment]:
         query = db.query(Appointment).filter(Appointment.id == appointment_id)
         if with_for_update and db.bind and db.bind.dialect.name != "sqlite":
-            query = query.with_for_update()
+            # populate_existing: a locked read must return the row as it is now,
+            # even if this session loaded it earlier, before the lock was taken.
+            query = query.with_for_update().populate_existing()
         return query.first()
 
     def get_active_overlapping(

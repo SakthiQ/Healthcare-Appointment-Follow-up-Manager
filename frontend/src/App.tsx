@@ -7,6 +7,10 @@ import { Spinner } from './components/ui';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
+import Account from './pages/Account';
 
 import PatientDashboard from './pages/patient/PatientDashboard';
 import DoctorSearch from './pages/patient/DoctorSearch';
@@ -22,6 +26,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import DoctorManagement from './pages/admin/DoctorManagement';
 import DoctorConfig from './pages/admin/DoctorConfig';
 import ConflictedAppointments from './pages/admin/ConflictedAppointments';
+import AuditLog from './pages/admin/AuditLog';
 
 function RootRedirect() {
   const { user, loading } = useAuth();
@@ -35,9 +40,22 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         <Route element={<Layout />}>
           <Route path="/" element={<RootRedirect />} />
+
+          {/* --- Any signed-in user --- */}
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute roles={['PATIENT', 'DOCTOR', 'ADMIN']}>
+                <Account />
+              </ProtectedRoute>
+            }
+          />
 
           {/* --- Patient portal --- */}
           <Route
@@ -137,6 +155,15 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN']}>
                 <ConflictedAppointments />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/audit"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AuditLog />
               </ProtectedRoute>
             }
           />

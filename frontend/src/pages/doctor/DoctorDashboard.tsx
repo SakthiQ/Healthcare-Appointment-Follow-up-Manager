@@ -18,9 +18,11 @@ export default function DoctorDashboard() {
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   // Today's count includes appointments that have already started or finished today.
-  const todayKey = formatDate(now.toISOString());
+  // "Today" is the day in the doctor's own timezone.
+  const tz = appointments[0]?.doctor_timezone;
+  const todayKey = formatDate(now.toISOString(), tz);
   const todays = appointments.filter(
-    (a) => ACTIVE.has(a.status) && formatDate(a.start_time) === todayKey,
+    (a) => ACTIVE.has(a.status) && formatDate(a.start_time, tz) === todayKey,
   );
 
   return (
@@ -61,9 +63,9 @@ export default function DoctorDashboard() {
               {upcoming.slice(0, 8).map((appt) => (
                 <li key={appt.id} className="list-row">
                   <div>
-                    <strong>{formatDateTime(appt.start_time)}</strong>
+                    <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
                     <div className="muted small">
-                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time)}
+                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time, appt.doctor_timezone)}
                     </div>
                   </div>
                   <div className="list-row-end">

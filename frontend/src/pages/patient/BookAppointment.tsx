@@ -10,6 +10,7 @@ import {
   formatCountdown,
   formatDateTime,
   formatTime,
+  timeZoneName,
   secondsUntil,
   todayInputValue,
   urgencyTone,
@@ -186,7 +187,7 @@ export default function BookAppointment() {
         <SuccessBanner>
           <div>
             <strong>You're booked with {doctor?.full_name}</strong>
-            <div>{formatDateTime(appointment.start_time)}</div>
+            <div>{formatDateTime(appointment.start_time, appointment.doctor_timezone)}</div>
           </div>
         </SuccessBanner>
 
@@ -275,7 +276,7 @@ export default function BookAppointment() {
                     .filter((wh) => wh.is_active)
                     .map((wh) => (
                       <li key={wh.id} className="chip">
-                        {DAY_NAMES[wh.day_of_week]} {wh.start_time.slice(0, 5)}–{wh.end_time.slice(0, 5)}
+                        {DAY_NAMES[wh.day_of_week]} {wh.start_time.slice(0, 5)}–{wh.end_time.slice(0, 5)} {timeZoneName(doctor?.timezone)}
                       </li>
                     ))}
                 </ul>
@@ -313,7 +314,7 @@ export default function BookAppointment() {
                 <>
                   <p className="muted small">
                     {available.length} of {slotsQuery.data?.total_slots} slots available. Times shown in
-                    UTC.
+                    the doctor's timezone: {timeZoneName(doctor?.timezone)}.
                   </p>
                   <div className="slot-grid">
                     {available.map((slot) => (
@@ -324,8 +325,8 @@ export default function BookAppointment() {
                         disabled={holding}
                         onClick={() => handleSelectSlot(slot)}
                       >
-                        {formatTime(slot.start_time)}
-                        <span className="slot-end">–{formatTime(slot.end_time)}</span>
+                        {formatTime(slot.start_time, doctor?.timezone)}
+                        <span className="slot-end">–{formatTime(slot.end_time, doctor?.timezone)}</span>
                       </button>
                     ))}
                   </div>
@@ -343,7 +344,7 @@ export default function BookAppointment() {
           <Card title="Your reserved slot">
             <div className="summary-row">
               <span>Time</span>
-              <strong>{formatDateTime(hold.start_time)}</strong>
+              <strong>{formatDateTime(hold.start_time, doctor?.timezone)}</strong>
             </div>
             <div className="summary-row">
               <span>Hold expires in</span>

@@ -800,12 +800,15 @@ def test_e2e_failure_simultaneous_booking_attempts(client, db_session, clinic):
     assert db_session.query(Appointment).filter(
         Appointment.patient_id == second_user["id"]
     ).count() == 0
+    # (Registration itself queues an email-verification job for every new user. That is not
+    # booking state, and it has no appointment, so only appointment jobs are counted here.)
     assert db_session.query(NotificationJob).filter(
-        NotificationJob.recipient_id == second_user["id"]
+        NotificationJob.recipient_id == second_user["id"],
+        NotificationJob.appointment_id.isnot(None),
     ).count() == 0
 
 
-def test_e2e_backend_restart_with_pending_jobs(client, db_session, clinic):
+def test_e2e_backend_restart_with_pending_jobs(client, db_session, clinic, monkeypatch):
     """
     Red-team scenario: the backend process dies with notification/calendar
     jobs still PENDING, then a new process starts.
@@ -843,8 +846,10 @@ def test_e2e_backend_restart_with_pending_jobs(client, db_session, clinic):
 
     import workers.notification_worker as notif_mod
     import workers.calendar_worker as cal_mod
-    notif_mod.notification_service = NotificationService(provider=fresh_email)
-    cal_mod.calendar_service = CalendarService(provider=fresh_calendar)
+    # monkeypatch, not plain assignment: the replaced services must be put back, or every
+    # later test that runs these workers silently talks to this test's providers.
+    monkeypatch.setattr(notif_mod, "notification_service", NotificationService(provider=fresh_email))
+    monkeypatch.setattr(cal_mod, "calendar_service", CalendarService(provider=fresh_calendar))
 
     notif_stats = post_restart_notification_worker.run_once(db_session)
     cal_stats = post_restart_calendar_worker.run_once(db_session)

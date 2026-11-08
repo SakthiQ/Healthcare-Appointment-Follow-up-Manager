@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.core.datetime_utils import ensure_utc, get_zone
 from models.notification import NotificationJob, NotificationType, NotificationStatus
 from repositories.notification_repository import notification_repository
 from repositories.appointment_repository import appointment_repository
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 # Bounded, simple exponential backoff (minutes), capped at 60.
 _RETRY_BACKOFF_CAP_MINUTES = 60
+
+# Jobs whose payload carries a secret link, scrubbed from the database once finished.
+_SECRET_TYPES = (NotificationType.PASSWORD_RESET, NotificationType.EMAIL_VERIFICATION)
 
 
 class NotificationService:
@@ -97,6 +101,21 @@ class NotificationService:
 
     # --- Processing ---
     def process_job(self, db: Session, job: NotificationJob) -> NotificationJob:
+        result = self._process(db, job)
+        if result.status in (NotificationStatus.SENT, NotificationStatus.FAILED):
+            self._scrub_secret(db, result)
+        return result
+
+    @staticmethod
+    def _scrub_secret(db: Session, job: NotificationJob) -> None:
+        """Once a job is finished, drop the secret link from its stored payload so a
+        password-reset or verification token does not sit in the jobs table afterwards."""
+        if job.notification_type in _SECRET_TYPES and job.payload:
+            job.payload = json.dumps({"redacted": True})
+            db.commit()
+            db.refresh(job)
+
+    def _process(self, db: Session, job: NotificationJob) -> NotificationJob:
         recipient = user_repository.get_by_id(db, job.recipient_id)
         if not recipient:
             return notification_repository.mark_failed_permanent(db, job, "Recipient user no longer exists.")
@@ -129,18 +148,18 @@ class NotificationService:
         if job.notification_type == NotificationType.BOOKING_CONFIRMATION:
             if not appointment:
                 raise ValueError("Appointment not found for booking confirmation.")
-            when = appointment.start_time.strftime("%Y-%m-%d %H:%M UTC")
+            when = self._local_when(appointment)
             return "Appointment Confirmed", f"Your appointment on {when} has been confirmed."
 
         if job.notification_type == NotificationType.APPOINTMENT_REMINDER:
             if not appointment:
                 raise ValueError("Appointment not found for appointment reminder.")
-            when = appointment.start_time.strftime("%Y-%m-%d %H:%M UTC")
+            when = self._local_when(appointment)
             return "Appointment Reminder", f"Reminder: you have an appointment on {when}."
 
         if job.notification_type == NotificationType.CANCELLATION:
             when = (
-                appointment.start_time.strftime("%Y-%m-%d %H:%M UTC")
+                self._local_when(appointment)
                 if appointment else payload.get("original_start_time", "the scheduled time")
             )
             return "Appointment Cancelled", f"Your appointment on {when} has been cancelled."
@@ -155,15 +174,47 @@ class NotificationService:
             )
 
         if job.notification_type == NotificationType.MEDICATION_REMINDER:
-            med_name = payload.get("medication_name", "your medication")
-            dosage = payload.get("dosage", "")
-            frequency = payload.get("frequency", "")
+            # Deliberately no drug name, dose or frequency: email is not a private
+            # channel, and what someone takes reveals what they are being treated
+            # for. The details stay in the app behind the patient's login.
             return (
                 "Medication Reminder",
-                f"Reminder: take {med_name} ({dosage}). Frequency: {frequency}."
+                "Reminder: it is time to take your prescribed medication. "
+                "Sign in to the app to see your prescription and schedule."
+            )
+
+        if job.notification_type == NotificationType.PASSWORD_RESET:
+            link = payload.get("link")
+            if not link:
+                raise ValueError("Password reset notification has no link.")
+            minutes = payload.get("expires_minutes", 30)
+            return (
+                "Reset your password",
+                "Someone (hopefully you) asked to reset the password for your account." + "\n\n"
+                + f"Open this link within {minutes} minutes to choose a new one:" + "\n" + link + "\n\n"
+                + "If you did not ask for this, ignore this email. Your password will not change.",
+            )
+
+        if job.notification_type == NotificationType.EMAIL_VERIFICATION:
+            link = payload.get("link")
+            if not link:
+                raise ValueError("Email verification notification has no link.")
+            hours = payload.get("expires_hours", 24)
+            return (
+                "Confirm your email address",
+                f"Please confirm your email address by opening this link within {hours} hours:" + "\n" + link
+                + "\n\nIf you did not create an account, ignore this email.",
             )
 
         raise ValueError(f"Unknown notification type: {job.notification_type}")
+
+    @staticmethod
+    def _local_when(appointment) -> str:
+        """The appointment start in the doctor's own timezone, e.g.
+        "2030-01-07 14:30 IST" ("... UTC" for a UTC doctor)."""
+        zone = get_zone(appointment.doctor.timezone if appointment.doctor else None)
+        local = ensure_utc(appointment.start_time).astimezone(zone)
+        return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
 
 
 notification_service = NotificationService()

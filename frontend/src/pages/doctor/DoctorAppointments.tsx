@@ -59,9 +59,9 @@ export default function DoctorAppointments() {
               {appointments.map((appt) => (
                 <li key={appt.id} className="list-row">
                   <div>
-                    <strong>{formatDateTime(appt.start_time)}</strong>
+                    <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
                     <div className="muted small">
-                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time)}
+                      {appt.patient_name ?? 'Unknown patient'} · Ends {formatDateTime(appt.end_time, appt.doctor_timezone)}
                     </div>
                   </div>
                   <div className="list-row-end">

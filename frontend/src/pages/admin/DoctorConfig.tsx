@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { WorkingHoursInput } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
-import { DAY_NAMES, formatDate, todayInputValue } from '../../lib/format';
+import { COMMON_TIMEZONES, DAY_NAMES, formatDate, isValidTimeZone, timeZoneName, todayInputValue } from '../../lib/format';
 import {
   Badge,
   Card,
@@ -35,6 +35,7 @@ export default function DoctorConfig() {
   // Profile form
   const [specialization, setSpecialization] = useState('');
   const [slotDuration, setSlotDuration] = useState(30);
+  const [timezone, setTimezone] = useState('UTC');
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
   const [profileError, setProfileError] = useState<unknown>(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -58,6 +59,7 @@ export default function DoctorConfig() {
     if (doctorQuery.data) {
       setSpecialization(doctorQuery.data.specialization);
       setSlotDuration(doctorQuery.data.slot_duration_minutes);
+      setTimezone(doctorQuery.data.timezone);
     }
   }, [doctorQuery.data]);
 
@@ -85,6 +87,8 @@ export default function DoctorConfig() {
     if (specialization.trim().length < 2) errs.specialization = 'Specialisation is required.';
     if (slotDuration < 5 || slotDuration > 240)
       errs.slotDuration = 'Slot duration must be between 5 and 240 minutes.';
+    if (!isValidTimeZone(timezone.trim() || 'UTC'))
+      errs.timezone = 'Enter a valid timezone, e.g. Asia/Kolkata.';
     setProfileErrors(errs);
     if (Object.keys(errs).length) return;
 
@@ -93,6 +97,7 @@ export default function DoctorConfig() {
       await api.updateDoctor(doctorId, {
         specialization: specialization.trim(),
         slot_duration_minutes: slotDuration,
+        timezone: timezone.trim() || 'UTC',
       });
       setNotice('Profile updated.');
       doctorQuery.reload();
@@ -258,6 +263,25 @@ export default function DoctorConfig() {
                 disabled={savingProfile}
               />
             </Field>
+            <Field
+              label="Timezone"
+              htmlFor="timezone"
+              error={profileErrors.timezone}
+              hint="Working hours and leave dates are in this timezone (IANA name, e.g. Asia/Kolkata). Changing it moves the hours, not existing bookings."
+            >
+              <input
+                id="timezone"
+                list="timezone-options"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                disabled={savingProfile}
+              />
+              <datalist id="timezone-options">
+                {COMMON_TIMEZONES.map((zone) => (
+                  <option key={zone} value={zone} />
+                ))}
+              </datalist>
+            </Field>
           </div>
           <div className="row-actions">
             <button type="submit" className="btn btn-primary" disabled={savingProfile}>
@@ -275,11 +299,11 @@ export default function DoctorConfig() {
         </form>
       </Card>
 
-      <Card title="Working hours">
+      <Card title={`Working hours (${timeZoneName(doctorQuery.data?.timezone)})`}>
         {scheduleQuery.loading ? <Spinner /> : null}
         <ErrorBanner error={scheduleError} />
         <p className="muted small">
-          Tick the days this doctor works. Saving replaces the entire weekly schedule. Times are UTC.
+          Tick the days this doctor works. Saving replaces the entire weekly schedule. Times are in this doctor's timezone (shown in the heading).
         </p>
         <form onSubmit={handleSaveSchedule} noValidate>
           {week.map((day, i) => (

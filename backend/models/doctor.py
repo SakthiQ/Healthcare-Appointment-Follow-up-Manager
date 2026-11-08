@@ -13,6 +13,9 @@ class Doctor(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     specialization = Column(String(255), nullable=False, index=True)
     slot_duration_minutes = Column(Integer, nullable=False, default=30)
+    # IANA zone (e.g. "Asia/Kolkata") that working hours and leave dates are written
+    # in. Appointments themselves are absolute instants, always stored in UTC.
+    timezone = Column(String(64), nullable=False, default="UTC", server_default="UTC")
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -1,12 +1,19 @@
 from typing import Optional, List
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from app.exceptions import ConflictError
 from models.appointment import AppointmentHold, Appointment, AppointmentStatus
 
 
 class HoldRepository:
-    def get_by_id(self, db: Session, hold_id: str) -> Optional[AppointmentHold]:
-        return db.query(AppointmentHold).filter(AppointmentHold.id == hold_id).first()
+    def get_by_id(self, db: Session, hold_id: str, with_for_update: bool = False) -> Optional[AppointmentHold]:
+        query = db.query(AppointmentHold).filter(AppointmentHold.id == hold_id)
+        if with_for_update and db.bind and db.bind.dialect.name != "sqlite":
+            # populate_existing: re-read the row as it is after the lock, so a
+            # second confirm of the same hold sees the first one's release.
+            query = query.with_for_update().populate_existing()
+        return query.first()
 
     def get_active_hold_for_slot(
         self, db: Session, doctor_id: str, start_time: datetime, end_time: datetime
@@ -59,7 +66,13 @@ class HoldRepository:
             is_active=True
         )
         db.add(hold)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # uq_active_hold_doctor_start_time: another request took this slot
+            # between HoldService's check and this insert.
+            db.rollback()
+            raise ConflictError("Slot is currently held by another patient.")
         db.refresh(hold)
         return hold
 
@@ -67,6 +80,30 @@ class HoldRepository:
         hold.is_active = False
         db.commit()
         db.refresh(hold)
+
+    def deactivate_no_commit(self, db: Session, hold: AppointmentHold):
+        """Like deactivate but only flushes — the caller owns the transaction, so
+        the hold is released only if the caller's own commit (e.g. the
+        appointment insert that consumes the hold) also succeeds."""
+        hold.is_active = False
+        db.flush()
+
+    def expire_stale_holds_for_slot(
+        self, db: Session, doctor_id: str, start_time: datetime
+    ) -> int:
+        """Deactivate expired-but-still-active holds on ONE slot. Run before a new
+        hold is inserted: such a row would otherwise trip the one-active-hold-per-slot
+        unique index even though nobody holds the slot any more."""
+        now = datetime.now(timezone.utc)
+        stale_count = db.query(AppointmentHold).filter(
+            AppointmentHold.doctor_id == doctor_id,
+            AppointmentHold.start_time == start_time,
+            AppointmentHold.is_active.is_(True),
+            AppointmentHold.expires_at <= now
+        ).update({"is_active": False}, synchronize_session=False)
+        if stale_count:
+            db.commit()
+        return stale_count
 
     def expire_stale_holds(self, db: Session) -> int:
         now = datetime.now(timezone.utc)

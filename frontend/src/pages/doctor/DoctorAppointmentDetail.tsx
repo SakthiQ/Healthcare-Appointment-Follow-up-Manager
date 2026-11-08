@@ -140,7 +140,7 @@ export default function DoctorAppointmentDetail() {
       <header className="page-head">
         <div>
           <h1>Consultation</h1>
-          <p className="muted">{formatDateTime(appt.start_time)}</p>
+          <p className="muted">{formatDateTime(appt.start_time, appt.doctor_timezone)}</p>
         </div>
         <Link className="btn" to="/doctor/appointments">
           Back
@@ -160,11 +160,11 @@ export default function DoctorAppointmentDetail() {
         </div>
         <div className="summary-row">
           <span>Starts</span>
-          <strong>{formatDateTime(appt.start_time)}</strong>
+          <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
         </div>
         <div className="summary-row">
           <span>Ends</span>
-          <strong>{formatDateTime(appt.end_time)}</strong>
+          <strong>{formatDateTime(appt.end_time, appt.doctor_timezone)}</strong>
         </div>
       </Card>
 

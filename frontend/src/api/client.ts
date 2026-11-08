@@ -1,6 +1,8 @@
 import type {
   Appointment,
   AISummary,
+  AuditLogPage,
+  MessageResponse,
   Consultation,
   Doctor,
   DoctorLeave,
@@ -20,11 +22,18 @@ const API = `${BASE_URL}/api/v1`;
 
 const TOKEN_KEY = 'healthcare.token';
 
+// Cookie mode (build with VITE_AUTH_COOKIES=true, and set AUTH_COOKIE_MODE=True on the
+// API): the session lives in an httpOnly cookie that scripts cannot read, so there is
+// no token to steal from the page. Needs the app and the API on the same site. All that
+// is kept in localStorage is a harmless "signed in" marker.
+const COOKIE_MODE = import.meta.env.VITE_AUTH_COOKIES === 'true';
+const COOKIE_SESSION_MARKER = 'cookie-session';
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_KEY, COOKIE_MODE ? COOKIE_SESSION_MARKER : token);
 }
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
@@ -81,11 +90,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (options.body) headers['Content-Type'] = 'application/json';
 
   const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (COOKIE_MODE) {
+    // The browser attaches the cookie. The custom header is the CSRF defence: a
+    // cross-site page cannot add it without a CORS preflight that the API refuses.
+    headers['X-CSRF-Protection'] = '1';
+  } else if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   let response: Response;
   try {
-    response = await fetch(`${API}${path}`, { ...options, headers });
+    response = await fetch(`${API}${path}`, {
+      ...options,
+      headers,
+      credentials: COOKIE_MODE ? 'include' : 'same-origin',
+    });
   } catch {
     throw new ApiError(
       'Could not reach the server. Check that the backend is running.',
@@ -157,6 +176,24 @@ export const api = {
   login: (data: { email: string; password: string }) => post<TokenResponse>('/auth/login', data),
 
   me: () => get<User>('/auth/me'),
+
+  /** Invalidates every token issued to this user, not just this browser's copy. */
+  logout: () => post<void>('/auth/logout'),
+
+  /** Signs every OTHER session out; the response carries a fresh token for this one. */
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    post<TokenResponse>('/auth/change-password', data),
+
+  /** Always succeeds the same way, whether or not the address has an account. */
+  forgotPassword: (email: string) => post<MessageResponse>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, new_password: string) =>
+    post<void>('/auth/reset-password', { token, new_password }),
+
+  verifyEmail: (token: string) => post<void>('/auth/verify-email', { token }),
+
+  resendVerification: (email: string) =>
+    post<MessageResponse>('/auth/resend-verification', { email }),
 
   // --- Doctors (public / patient) ---
   searchDoctors: (specialization?: string) =>
@@ -236,11 +273,12 @@ export const api = {
     full_name: string;
     specialization: string;
     slot_duration_minutes: number;
+    timezone: string;
   }) => post<Doctor>('/admin/doctors', data),
 
   updateDoctor: (
     doctorId: string,
-    data: { specialization?: string; slot_duration_minutes?: number; is_active?: boolean },
+    data: { specialization?: string; slot_duration_minutes?: number; is_active?: boolean; timezone?: string },
   ) => put<Doctor>(`/admin/doctors/${doctorId}`, data),
 
   setDoctorStatus: (doctorId: string, isActive: boolean) =>
@@ -248,6 +286,21 @@ export const api = {
 
   configureWorkingHours: (doctorId: string, workingHours: WorkingHoursInput[]) =>
     post<WorkingHours[]>(`/admin/doctors/${doctorId}/schedule`, { working_hours: workingHours }),
+
+  listAuditLogs: (params: {
+    action?: string;
+    actor_id?: string;
+    patient_id?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') q.set(key, String(value));
+    });
+    const qs = q.toString();
+    return get<AuditLogPage>(`/admin/audit-logs${qs ? `?${qs}` : ''}`);
+  },
 
   createLeave: (doctorId: string, data: { leave_date: string; reason?: string }) =>
     post<DoctorLeave>(`/admin/doctors/${doctorId}/leaves`, data),

@@ -9,10 +9,15 @@ services:
     runtime: python
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    # constraints.txt pins every package to the version CI tests, so a deploy next month
+    # installs what a deploy today does. Refresh with backend/scripts/refresh_constraints.py.
+    buildCommand: pip install -r requirements.txt -c constraints.txt
     # Migrations run on every boot; they are idempotent, and a fresh database gets
     # every table, index and constraint on the first deploy.
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # --proxy-headers/--forwarded-allow-ips make the client IP (used by the login
+    # throttle) the real one from X-Forwarded-For instead of Render's proxy.
+    # Only safe because the service is reachable solely through that proxy.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -31,11 +36,20 @@ services:
       - key: SECRET_KEY
         generateValue: true
       # The Vercel production URL, e.g. https://your-app.vercel.app (no trailing slash).
+      # Password-reset and email-verification links point here. Without it they would
+      # point at http://localhost:5173.
+      - key: FRONTEND_BASE_URL
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       # Optional: also allow Vercel preview deployments, e.g.
       # ^https://your-project-[a-z0-9-]+\.vercel\.app$
       - key: CORS_ALLOWED_ORIGIN_REGEX
         sync: false
+      # This service type has no separate worker process, so the notification and
+      # calendar workers run on background threads inside the web process.
+      # Without this, queued emails and calendar syncs are never delivered.
+      - key: RUN_WORKERS_IN_PROCESS
+        value: "True"
       - key: ALLOW_PRIVILEGED_SELF_REGISTRATION
         value: "False"

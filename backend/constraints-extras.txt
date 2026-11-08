@@ -1,0 +1,7 @@
+# Pins for packages pip only installs on some platforms, so a refresh run on another OS
+# cannot discover them. scripts/refresh_constraints.py appends these lines to constraints.txt.
+# CI fails if the real Linux install contains a package that is not pinned, which is the
+# signal to add it here.
+
+# uvicorn[standard] installs uvloop on Linux and macOS but not on Windows.
+uvloop==0.21.0; sys_platform != "win32"

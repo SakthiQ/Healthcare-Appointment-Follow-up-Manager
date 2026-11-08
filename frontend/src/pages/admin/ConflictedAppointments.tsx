@@ -44,7 +44,7 @@ export default function ConflictedAppointments() {
               <tbody>
                 {conflicts.map((appt) => (
                   <tr key={appt.id}>
-                    <td>{formatDateTime(appt.start_time)}</td>
+                    <td>{formatDateTime(appt.start_time, appt.doctor_timezone)}</td>
                     <td>{appt.doctor_name ?? '—'}</td>
                     <td>{appt.patient_name ?? <span className="mono small">{appt.patient_id}</span>}</td>
                     <td>
