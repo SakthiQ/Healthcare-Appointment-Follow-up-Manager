@@ -40,6 +40,9 @@ class MockEmailProvider(EmailProvider):
     def send(self, to_email: str, subject: str, body: str) -> None:
         self.sent_emails.append({"to": to_email, "subject": subject, "body": body})
         logger.info("MockEmailProvider: would send to=%s subject=%r", to_email, subject)
+        # The body can hold a one-time link, so it is only logged at DEBUG (set LOG_LEVEL=DEBUG
+        # locally to follow a password-reset or verification link in demo mode).
+        logger.debug("MockEmailProvider body to=%s: %s", to_email, body)
 
 
 class RealEmailProvider(EmailProvider):

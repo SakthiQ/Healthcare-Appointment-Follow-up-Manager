@@ -800,8 +800,11 @@ def test_e2e_failure_simultaneous_booking_attempts(client, db_session, clinic):
     assert db_session.query(Appointment).filter(
         Appointment.patient_id == second_user["id"]
     ).count() == 0
+    # (Registration itself queues an email-verification job for every new user. That is not
+    # booking state, and it has no appointment, so only appointment jobs are counted here.)
     assert db_session.query(NotificationJob).filter(
-        NotificationJob.recipient_id == second_user["id"]
+        NotificationJob.recipient_id == second_user["id"],
+        NotificationJob.appointment_id.isnot(None),
     ).count() == 0
 
 

@@ -6,6 +6,7 @@ from app.dependencies import get_current_user, require_role
 from models.user import User, UserRole
 from models.appointment import AppointmentStatus
 from services.appointment_service import appointment_service
+from services.audit_service import audit_service
 from schemas.appointment import (
     AppointmentCreateRequest,
     AppointmentRescheduleRequest,
@@ -35,9 +36,17 @@ def list_appointments(
     db: Session = Depends(get_db)
 ):
     """List appointments for authorized user."""
-    return appointment_service.list_appointments(
+    result = appointment_service.list_appointments(
         db, user=current_user, doctor_id=doctor_id, patient_id=patient_id, status_filter=status_filter
     )
+    if current_user.role == UserRole.ADMIN:  # an admin listing everyone's appointments is worth a trail
+        audit_service.record(
+            db, "appointment.list", actor=current_user, resource_type="appointment",
+            patient_id=patient_id,
+            detail={k: v for k, v in {"doctor_id": doctor_id, "patient_id": patient_id,
+                                      "status": status_filter.value if status_filter else None}.items() if v},
+        )
+    return result
 
 
 @router.get("/{appointment_id}", response_model=AppointmentResponse, status_code=status.HTTP_200_OK)
@@ -47,7 +56,9 @@ def get_appointment(
     db: Session = Depends(get_db)
 ):
     """Retrieve details of a single appointment."""
-    return appointment_service.get_appointment(db, appointment_id=appointment_id, user=current_user)
+    result = appointment_service.get_appointment(db, appointment_id=appointment_id, user=current_user)
+    audit_service.record_appointment_access(db, "appointment.view", current_user, appointment_id)
+    return result
 
 
 @router.post("/{appointment_id}/reschedule", response_model=AppointmentResponse, status_code=status.HTTP_200_OK)

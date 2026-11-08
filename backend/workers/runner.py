@@ -76,6 +76,7 @@ def start_background_workers(
     from app.database import SessionLocal
     from workers.calendar_worker import calendar_worker
     from workers.hold_worker import hold_expiry_worker
+    from workers.maintenance_worker import maintenance_worker
     from workers.notification_worker import notification_worker
 
     runner = WorkerRunner(
@@ -84,6 +85,7 @@ def start_background_workers(
             "NotificationWorker": notification_worker,
             "CalendarWorker": calendar_worker,
             "HoldExpiryWorker": hold_expiry_worker,
+            "MaintenanceWorker": maintenance_worker,
         },
         poll_interval_seconds=(
             poll_interval_seconds

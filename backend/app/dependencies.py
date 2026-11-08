@@ -7,6 +7,7 @@ from app.database import get_db
 from app.core.security import decode_access_token
 from app.exceptions import UnauthorizedError, ForbiddenError
 from repositories.user_repository import user_repository
+from services.rate_limit_service import rate_limit_service
 from models.user import User, UserRole
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -71,6 +72,33 @@ def get_optional_user(
         return get_current_user(request, credentials, db)
     except (UnauthorizedError, ForbiddenError):
         return None
+
+
+def client_ip(request: Request) -> str:
+    """The caller's IP. Behind a proxy this is the real one only if uvicorn runs with
+    --proxy-headers (the Render blueprint does)."""
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limited(bucket: str, limit_setting: str, window_seconds: int = 3600):
+    """Dependency factory: at most `settings.<limit_setting>` requests per client IP per
+    window to the routes that use it, else HTTP 429 with Retry-After."""
+    def dependency(request: Request, db: Session = Depends(get_db)) -> None:
+        rate_limit_service.check(db, bucket, client_ip(request), getattr(settings, limit_setting), window_seconds)
+    return dependency
+
+
+def rate_limited_per_user(bucket: str, limit_setting: str, window_seconds: int = 3600, roles: tuple = ()):
+    """Like rate_limited, but per signed-in user. Returns the user, so a route can use it
+    in place of get_current_user (or of require_role, when `roles` is given)."""
+    def dependency(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+        if roles and current_user.role not in roles:
+            raise ForbiddenError(
+                f"Access denied for role '{current_user.role.value}'. Allowed roles: {[r.value for r in roles]}"
+            )
+        rate_limit_service.check(db, bucket, current_user.id, getattr(settings, limit_setting), window_seconds)
+        return current_user
+    return dependency
 
 
 def require_role(*allowed_roles: UserRole):

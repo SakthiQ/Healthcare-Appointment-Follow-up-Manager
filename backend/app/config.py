@@ -60,6 +60,24 @@ class Settings(BaseSettings):
     # failures both count), so repeated clicks can't run up the LLM bill.
     AI_MAX_SUMMARIES_PER_APPOINTMENT: int = 10
 
+    # Request rate limits (fixed one-hour windows, stored in the database so they hold
+    # across instances). Disabled in the test suite via RATE_LIMITING_ENABLED=False.
+    RATE_LIMITING_ENABLED: bool = True
+    REGISTER_RATE_LIMIT_PER_HOUR: int = 10              # per client IP
+    PASSWORD_RESET_RATE_LIMIT_PER_HOUR: int = 5         # forgot-password / resend, per client IP
+    PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR: int = 3   # ...and per target email, so an inbox can't be flooded
+    AUTH_TOKEN_RATE_LIMIT_PER_HOUR: int = 30            # reset-password / verify-email submissions, per IP
+    CHANGE_PASSWORD_RATE_LIMIT_PER_HOUR: int = 10       # per signed-in user
+    AI_RATE_LIMIT_PER_HOUR: int = 30                    # AI summary generations, per signed-in user
+
+    # Account emails (password reset, email verification). Links point at the frontend.
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_TOKEN_TTL_MINUTES: int = 30
+    EMAIL_VERIFICATION_TOKEN_TTL_HOURS: int = 24
+    # When True, login is refused until the user has verified their email address.
+    # Off by default so the demo flow (register, then use the app) keeps working.
+    REQUIRE_EMAIL_VERIFICATION: bool = False
+
     # When set, a doctor cannot record a consultation (which marks the appointment
     # COMPLETED and schedules medication reminders) more than this many minutes before
     # the appointment starts. Unset = no check, which the demo flow needs: it books a

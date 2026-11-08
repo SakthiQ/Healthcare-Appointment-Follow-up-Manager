@@ -10,6 +10,12 @@ class UserRepository:
         user.token_version = (user.token_version or 0) + 1
         db.commit()
 
+    def set_password(self, db: Session, user: User, password_hash: str) -> None:
+        """New password hash AND every existing token revoked, in one commit."""
+        user.password_hash = password_hash
+        user.token_version = (user.token_version or 0) + 1
+        db.commit()
+
     def get_by_id(self, db: Session, user_id: str) -> Optional[User]:
         return db.query(User).filter(User.id == user_id).first()
 
@@ -22,13 +28,15 @@ class UserRepository:
         email: str,
         password_hash: str,
         full_name: str,
-        role: UserRole = UserRole.PATIENT
+        role: UserRole = UserRole.PATIENT,
+        email_verified: bool = False,
     ) -> User:
         user = User(
             email=email.lower().strip(),
             password_hash=password_hash,
             full_name=full_name.strip(),
-            role=role
+            role=role,
+            email_verified=email_verified,
         )
         db.add(user)
         db.commit()

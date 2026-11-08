@@ -25,7 +25,8 @@ if not PG or os.environ.get("VERIFY_PG_WIPE") != "yes":
     sys.exit("Set VERIFY_PG_URL to a SCRATCH database and VERIFY_PG_WIPE=yes (this wipes its public schema). See the docstring.")
 BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(BACKEND)
-os.environ.update(DATABASE_URL=PG, ALLOW_PRIVILEGED_SELF_REGISTRATION="True", ENVIRONMENT="development")
+os.environ.update(DATABASE_URL=PG, ALLOW_PRIVILEGED_SELF_REGISTRATION="True", ENVIRONMENT="development",
+                  RATE_LIMITING_ENABLED="False")  # the script registers many users from one address
 sys.path.insert(0, BACKEND)
 
 import psycopg2
@@ -88,6 +89,13 @@ check("exactly one of the duplicate active holds survived", active == 1, f"activ
 cols = {r[0] for r in sql("SELECT column_name FROM information_schema.columns WHERE table_name IN ('doctors','users')", fetch=True)}
 check("new columns exist", {"timezone", "token_version"} <= cols)
 check("login_throttles table exists", bool(sql("SELECT to_regclass('public.login_throttles')", fetch=True)[0][0]))
+for table in ("rate_limits", "auth_tokens", "audit_logs"):
+    check(f"{table} table exists", bool(sql("SELECT to_regclass(%s)", ("public." + table,), fetch=True)[0][0]))
+enum_values = {r[0] for r in sql(
+    "SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'notificationtype'", fetch=True)}
+check("the notificationtype enum gained PASSWORD_RESET and EMAIL_VERIFICATION", {"PASSWORD_RESET", "EMAIL_VERIFICATION"} <= enum_values)
+check("users that existed before the email_verified column count as verified",
+      sql("SELECT bool_and(email_verified) FROM users", fetch=True)[0][0] is True)
 sql("DELETE FROM appointment_holds; DELETE FROM doctors; DELETE FROM users;")
 
 # ------------------------------------------------------------------ DB-level guards
@@ -266,6 +274,42 @@ check("logout revokes the token on PostgreSQL", client.get("/api/v1/auth/me", he
 ist = client.post("/api/v1/admin/doctors", json={"email": "doc_ist@pg.com", "password": "password123", "full_name": "Dr IST",
                                                  "specialization": "Cardiology", "timezone": "Asia/Kolkata"}, headers=admin).json()
 check("per-doctor timezone round-trips on PostgreSQL", ist.get("timezone") == "Asia/Kolkata")
+
+# --- password reset on PostgreSQL: needs the new enum values and the token table
+import json
+from urllib.parse import parse_qs, urlparse
+
+client.post("/api/v1/auth/forgot-password", json={"email": "p5@pg.com"})
+payload = sql("SELECT payload FROM notification_jobs WHERE notification_type = 'PASSWORD_RESET' "
+              "ORDER BY created_at DESC LIMIT 1", fetch=True)[0][0]
+reset_token = parse_qs(urlparse(json.loads(payload)["link"]).query)["token"][0]
+reset = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": "reset-pass-99"})
+relogin = client.post("/api/v1/auth/login", json={"email": "p5@pg.com", "password": "reset-pass-99"})
+reuse = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": "another-pass-1"})
+check("password reset works end to end on PostgreSQL (and the link is single use)",
+      (reset.status_code, relogin.status_code, reuse.status_code) == (204, 200, 422),
+      f"reset={reset.status_code} login={relogin.status_code} reuse={reuse.status_code}")
+
+# --- audit log on PostgreSQL
+audited = sql("SELECT count(*) FROM audit_logs WHERE action = 'auth.login'", fetch=True)[0][0]
+page = client.get("/api/v1/admin/audit-logs", params={"action": "auth."}, headers=admin)
+check("logins are audited and the admin audit endpoint reads them",
+      audited >= 1 and page.status_code == 200 and page.json()["total"] >= 1,
+      f"rows={audited} endpoint={page.status_code}")
+
+# --- the rate limiter under real concurrency: row locks make the count exact
+from app.config import settings
+
+settings.RATE_LIMITING_ENABLED = True
+settings.PASSWORD_RESET_RATE_LIMIT_PER_HOUR = 5
+try:
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        codes = list(pool.map(
+            lambda i: client.post("/api/v1/auth/forgot-password", json={"email": f"rl{i}@pg.com"}).status_code, range(12)))
+finally:
+    settings.RATE_LIMITING_ENABLED = False
+check("12 concurrent requests against a limit of 5: exactly 5 pass, the rest are 429, no 5xx",
+      codes.count(202) == 5 and codes.count(429) == 7, f"codes={sorted(codes)}")
 
 client.__exit__(None, None, None)
 print(f"\nSUMMARY: {sum(results)}/{len(results)} passed", flush=True)

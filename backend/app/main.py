@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.core.request_context import RequestContextMiddleware
 from app.logging_config import setup_logging
 from app.exceptions import AppException, app_exception_handler, global_exception_handler
 from app.api import api_router
@@ -47,6 +48,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Makes the client IP available to services (the audit log records it).
+    app.add_middleware(RequestContextMiddleware)
 
     # Register custom exception handlers
     app.add_exception_handler(AppException, app_exception_handler)

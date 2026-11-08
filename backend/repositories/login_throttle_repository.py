@@ -37,6 +37,15 @@ class LoginThrottleRepository:
             db.rollback()
         return row
 
+    def purge_stale(self, db: Session, cutoff: datetime) -> int:
+        """Drop counters whose window (and any lockout) ended before `cutoff`."""
+        deleted = db.query(LoginThrottle).filter(
+            LoginThrottle.window_started_at < cutoff,
+            (LoginThrottle.locked_until.is_(None)) | (LoginThrottle.locked_until < cutoff),
+        ).delete(synchronize_session=False)
+        db.commit()
+        return deleted
+
     def clear(self, db: Session, key: str) -> None:
         if db.query(LoginThrottle).filter(LoginThrottle.key == key).delete():
             db.commit()

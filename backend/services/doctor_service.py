@@ -34,7 +34,8 @@ class DoctorService:
             email=req.email,
             password_hash=hashed_pw,
             full_name=req.full_name,
-            role=UserRole.DOCTOR
+            role=UserRole.DOCTOR,
+            email_verified=True,  # the admin vouches for the address
         )
 
         doctor = doctor_repository.create_doctor(
