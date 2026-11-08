@@ -139,3 +139,49 @@ Working hours and leave dates are wall-clock values in the **doctor's** timezone
 - **Medication reminder emails** say a reminder is due and point to the app; they never name the drug, dose or frequency.
 - **Consultation timing:** `CONSULTATION_EARLY_SUBMIT_MINUTES` (unset by default) rejects a consultation recorded more than that long before the appointment starts. It is off by default because the demo flow books a future slot and consults straight away; set it (e.g. 15) for a real clinic.
 - **Calendar:** a leave that conflicts an appointment also queues deletion of its calendar events (after the leave commits, best-effort, like every other calendar step).
+
+---
+
+## 8. Account Flows (password change, reset, email verification)
+
+- **Change password** (`POST /auth/change-password`, signed in): needs the current password, signs every *other* session out (the token version is bumped) and returns a fresh token so the current session carries on. A wrong current password is a 422, not a 401, because the frontend treats any 401 as "your session expired".
+- **Forgot / reset password**: `POST /auth/forgot-password` answers identically whether or not the address has an account, so it cannot be used to discover who is registered. A real account gets a single-use link (30 minutes) by email. `POST /auth/reset-password` spends the link, sets the password and signs the account out everywhere in one commit; asking for a new link replaces the old one.
+- **Email verification**: registration emails a link (24 hours); `POST /auth/verify-email` confirms it and `POST /auth/resend-verification` replaces it. Login only requires it when `REQUIRE_EMAIL_VERIFICATION=True` (off by default for the demo flow). Accounts created by an admin and accounts that existed before the feature count as verified.
+- **Tokens**: random (256 bits), stored only as a SHA-256 hash, single use, expiring. The link in the queued email job is scrubbed from the database once the email is sent or has permanently failed, so a reset link does not sit in the jobs table.
+- The emails go through the same notification queue as everything else, so a mail outage never fails a registration or a reset request.
+
+---
+
+## 9. Rate Limiting
+
+Fixed one-hour windows kept in the `rate_limits` table, so limits hold across instances and restarts (keys are SHA-256 hashes; no plain IPs or emails are stored). Over the limit is HTTP 429 with `Retry-After`.
+
+| What | Limited per | Default |
+|---|---|---|
+| Registration | client IP | 10 / hour |
+| Forgot-password and resend-verification | client IP, and separately the target email | 5 and 3 / hour |
+| Reset-password and verify-email submissions | client IP | 30 / hour |
+| Change password | signed-in user | 10 / hour |
+| AI summary generation | signed-in user (on top of the per-appointment cap) | 30 / hour |
+| Login failures | (email, IP), lockout | 5 failures, 15 minutes |
+
+The counter uses row locks on PostgreSQL, so concurrent requests count exactly (checked by `scripts/verify_postgres.py`). Behind a proxy the server must run with `--proxy-headers` or every client shares the proxy's IP. A `MaintenanceWorker` purges expired counters and tokens. `RATE_LIMITING_ENABLED=False` switches the limiter off (the test suite does, because many tests register dozens of users from one address).
+
+---
+
+## 10. Audit Log
+
+An append-only `audit_logs` table answers "who looked at or changed what". Entries hold identifiers and an action name, never clinical content, and have no foreign keys, so they outlive the users and appointments they mention.
+
+- **Recorded**: logins, lockouts and logouts; password changes, reset requests and resets; email verification; registration; reads of an appointment, consultation or AI summary by anyone *other than the patient it belongs to*; consultation submission and post-visit AI generation; every admin action (doctor create/update/status, working hours, leave create/delete); reading the audit log itself. Failed logins are not logged one by one (that would let an attacker flood the log); the lockout is.
+- **Each entry**: when (UTC), actor id and role, action (dotted, e.g. `appointment.view`), resource type and id, the patient whose data was touched, client IP, and a small JSON detail (e.g. a filter or an attempted email, never a note or a drug name).
+- **Reading it**: `GET /admin/audit-logs` (admin only; filter by action or prefix such as `auth.`, actor, patient, resource, time range; paged, newest first) and the Audit log page. There is no endpoint to change or delete entries.
+- **Best-effort by design**: entries are written after the action succeeds, through their own session, so they never commit or roll back the caller's work. If a write fails it is logged at ERROR and the request still succeeds. Retention is a policy decision the application does not make.
+
+---
+
+## 11. Reproducible builds and CI
+
+- `backend/requirements.txt` states what the app is compatible with (ranges); `backend/constraints.txt` pins every package, direct and transitive, to the version that is tested. Install with `pip install -r requirements.txt -c constraints.txt` (Render does). This exists because `sqlalchemy>=2.0,<3.0` once resolved to 2.1, which changed the default PostgreSQL driver and crashed a fresh install.
+- `scripts/refresh_constraints.py` regenerates the pins in a clean environment (platform-only packages such as `uvloop` live in `constraints-extras.txt`); `scripts/check_constraints.py` fails if anything installed is unpinned or differs from its pin.
+- `.github/workflows/ci.yml` runs on every push and pull request: backend tests plus the pin check on Python 3.12 (the production runtime), `scripts/verify_postgres.py` against a PostgreSQL 16 service container (which includes `btree_gist`, so the full overlap constraint is exercised), and the frontend typecheck, tests and build. Dependabot opens weekly update pull requests for the frontend, GitHub Actions and the `requirements.txt` ranges.

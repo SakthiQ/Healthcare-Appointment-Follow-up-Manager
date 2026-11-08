@@ -84,7 +84,8 @@ backend/
 │   ├── logging_config.py
 │   ├── core/
 │   │   ├── security.py         # password hashing, JWT encode/decode
-│   │   └── datetime_utils.py   # ensure_utc helper
+│   │   ├── datetime_utils.py   # ensure_utc, per-doctor timezone helpers
+│   └── request_context.py  # client IP bound per request (for the audit log)
 │   └── api/                    # thin route handlers, one file per resource
 │       ├── health.py
 │       ├── auth.py             # register, login, me
@@ -133,12 +134,15 @@ backend/
 │   └── calendar_provider.py
 ├── workers/                      # simple polling workers, no broker
 │   ├── notification_worker.py
-│   └── calendar_worker.py
+│   ├── calendar_worker.py
+│   ├── hold_worker.py        # sweeps expired holds
+│   ├── maintenance_worker.py # purges expired counters and email tokens
+│   └── runner.py             # runs the workers on threads inside the web process
 ├── alembic/
 │   ├── env.py
 │   └── versions/                 # 4 migrations: initial_schema, create_domain_models,
 │                                  # add_double_booking_unique_constraint, add_calendar_sync_retry_fields
-└── tests/                        # 194 tests total (see docs/requirement-mapping.md)
+└── tests/                        # 231 backend tests total (see docs/requirement-mapping.md)
     ├── conftest.py
     ├── test_config.py, test_database.py, test_health.py       # Phase 1
     ├── test_models.py                                          # Phase 2 (+ Phase 6 hardening)
@@ -318,6 +322,7 @@ graph LR
 | Notification Worker | Polls every `WORKER_POLL_INTERVAL_SECONDS` (30s) | Claims due PENDING notification jobs, sends via email provider, updates status; requeues jobs a dead worker left PROCESSING |
 | Calendar Worker | Same | Claims due PENDING_SYNC rows, calls the calendar provider, updates status |
 
+| Maintenance Worker | Hourly when run standalone | Purges expired rate-limit counters, login-throttle counters and spent or expired email tokens. Housekeeping only; never touches the audit log |
 | Hold Expiry Worker | Same (60s when run standalone) | Deactivates holds past `expires_at`. Housekeeping only: every read already ignores expired holds, and a new hold on a slot clears that slot's stale row itself |
 
 There is no separate reminder worker: reminders are scheduled as `NotificationJob` rows
@@ -330,7 +335,7 @@ reports it as inactive once expired without changing the row.
   since that service type has no separate worker process. Safe with several web instances
   (both claim rows with `FOR UPDATE SKIP LOCKED` on PostgreSQL).
 - `RUN_WORKERS_IN_PROCESS=False` (default) leaves them to separate processes:
-  `python -m workers.notification_worker` / `python -m workers.calendar_worker` / `python -m workers.hold_worker`.
+  `python -m workers.notification_worker` / `python -m workers.calendar_worker` / `python -m workers.hold_worker` / `python -m workers.maintenance_worker`.
 
 ---
 

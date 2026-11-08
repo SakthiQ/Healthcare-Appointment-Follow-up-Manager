@@ -243,6 +243,11 @@ stateDiagram-v2
 - `users.token_version` (int, default 0): bumped by logout; access tokens carry it and are rejected on mismatch.
 - `login_throttles(key PK, failed_count, window_started_at, locked_until)`: failed-login counters, `key` = SHA-256 of `email|client IP`.
 - `appointment_holds`: partial unique index `uq_active_hold_doctor_start_time` on `(doctor_id, start_time) WHERE is_active`.
+- `users.email_verified` (bool, not null): false until the emailed link is followed. Pre-existing rows and admin-created doctors are true.
+- `rate_limits(key PK, count, window_started_at)`: fixed-window request counters; `key` = SHA-256 of `bucket|identity`.
+- `auth_tokens(id PK, user_id FK, purpose, token_hash UNIQUE, expires_at, used_at, created_at)`: single-use password-reset and email-verification tokens; only the hash is stored.
+- `audit_logs(id PK, occurred_at, actor_user_id, actor_role, action, resource_type, resource_id, patient_id, ip, detail)`: append-only, deliberately no foreign keys, indexed on time, actor, action, resource and patient.
+- `notificationtype` enum gained `PASSWORD_RESET` and `EMAIL_VERIFICATION`. On PostgreSQL the migration runs `ALTER TYPE ... ADD VALUE` outside a transaction block; PostgreSQL cannot remove an enum value, so a downgrade leaves them (unused).
 
 ### Doctor Leave Constraint
 - Doctor leave dates prevent slot generation for the full 24-hour day of the leave date.

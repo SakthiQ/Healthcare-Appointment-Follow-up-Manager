@@ -183,6 +183,9 @@ driver, which is not installed, so without this a fresh install crashes at start
 | `SECRET_KEY` | dev key | The app refuses to start with the default key when `ENVIRONMENT=production` |
 | `LOGIN_MAX_FAILED_ATTEMPTS` / `LOGIN_LOCKOUT_MINUTES` | 5 / 15 | Failed logins per (email, IP) before a 429 lockout |
 | `AI_MAX_SUMMARIES_PER_APPOINTMENT` | 10 | Cap on AI summaries per appointment and type |
+| `RATE_LIMITING_ENABLED` and the `*_RATE_LIMIT_PER_HOUR` settings | on | Per-IP, per-email and per-user request limits (see `docs/system-design.md` section 9) |
+| `FRONTEND_BASE_URL` | `http://localhost:5173` | **Set this in production.** Password-reset and verification emails link to it |
+| `REQUIRE_EMAIL_VERIFICATION` | off | Refuse login until the address is verified. Off keeps the demo flow working |
 | `AUTH_COOKIE_MODE` (+ `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`) | off | Keep the session in an httpOnly cookie instead of `localStorage`. Needs the app and API on the same site, and the frontend built with `VITE_AUTH_COOKIES=true`. Leave off for a cross-site Vercel + Render setup |
 | `CONSULTATION_EARLY_SUBMIT_MINUTES` | unset | Reject consultations recorded earlier than this before the appointment. Unset keeps the demo flow working |
 
@@ -204,3 +207,16 @@ Once both halves are live:
 4. With `DEMO_MODE=True`, every workflow above works with zero external credentials —
    that's the point of DEMO_MODE for an evaluator who doesn't want to provision a real
    LLM/SMTP/Google account just to see the app function.
+
+## Accounts, email and the audit log
+
+- **Set `FRONTEND_BASE_URL`** to your Vercel URL. `render.yaml` lists it as a value you must supply; left at the default, every password-reset and verification email would link to `localhost`.
+- Reset and verification emails need real SMTP (section 5). With `DEMO_MODE=True` nothing is sent; to follow a link while demoing, run with `LOG_LEVEL=DEBUG` and read it from the mock provider's log line.
+- Turn on `REQUIRE_EMAIL_VERIFICATION` only once real email works, otherwise nobody can sign in.
+- The audit log is readable by admins on the **Audit log** page or at `GET /api/v1/admin/audit-logs`. Entries are never deleted by the application, so decide on a retention period and purge outside it if your rules require one.
+
+## Reproducible installs and CI
+
+- Install the backend with `pip install -r requirements.txt -c constraints.txt` (the Render build command does). `constraints.txt` pins every package to the version CI tests. To update the pins, run `python scripts/refresh_constraints.py` (use the same Python minor version as `PYTHON_VERSION` in `render.yaml`), run the tests, review the diff and commit. `python scripts/check_constraints.py` fails if anything installed is unpinned or has drifted. `uvloop` is Linux-only, so it is pinned in `constraints-extras.txt`; if CI reports an unpinned package, add it there.
+- `.github/workflows/ci.yml` runs on every push to `main` and every pull request: backend tests with the pin check (Python 3.12), `scripts/verify_postgres.py` against a PostgreSQL 16 container, and the frontend typecheck, tests and build. It needs no secrets. Dependabot (`.github/dependabot.yml`) opens weekly PRs for the frontend, GitHub Actions and the ranges in `requirements.txt`; it cannot see `constraints.txt`, so refresh that by hand.
+- Actions are referenced by major version tags (`@v4`, `@v5`). For stricter supply-chain control, pin them to commit SHAs.
