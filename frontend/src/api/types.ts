@@ -20,6 +20,8 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  /** False until the user follows the link emailed to them. */
+  email_verified: boolean;
   created_at: string;
 }
 
@@ -156,4 +158,28 @@ export interface Consultation {
   notes: string;
   created_at: string;
   medications: MedicationResponse[];
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  actor_role: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  patient_id: string | null;
+  ip: string | null;
+  detail: string | null;
+}
+
+export interface AuditLogPage {
+  items: AuditLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
 }

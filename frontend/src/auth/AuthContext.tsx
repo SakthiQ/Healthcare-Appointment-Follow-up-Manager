@@ -8,6 +8,10 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  /** Signs this user's other sessions out; this one carries on with a fresh token. */
+  changePassword: (current: string, next: string) => Promise<void>;
+  /** Re-reads the signed-in user (e.g. after their email is verified). */
+  refreshUser: () => Promise<void>;
   hasRole: (...roles: UserRole[]) => boolean;
 }
 
@@ -64,14 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const changePassword = useCallback(async (current: string, next: string) => {
+    const result = await api.changePassword({ current_password: current, new_password: next });
+    setToken(result.access_token);
+    setUser(result.user);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    setUser(await api.me());
+  }, []);
+
   const hasRole = useCallback(
     (...roles: UserRole[]) => (user ? roles.includes(user.role) : false),
     [user],
   );
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, hasRole }),
-    [user, loading, login, logout, hasRole],
+    () => ({ user, loading, login, logout, changePassword, refreshUser, hasRole }),
+    [user, loading, login, logout, changePassword, refreshUser, hasRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,6 +1,8 @@
 import type {
   Appointment,
   AISummary,
+  AuditLogPage,
+  MessageResponse,
   Consultation,
   Doctor,
   DoctorLeave,
@@ -178,6 +180,21 @@ export const api = {
   /** Invalidates every token issued to this user, not just this browser's copy. */
   logout: () => post<void>('/auth/logout'),
 
+  /** Signs every OTHER session out; the response carries a fresh token for this one. */
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    post<TokenResponse>('/auth/change-password', data),
+
+  /** Always succeeds the same way, whether or not the address has an account. */
+  forgotPassword: (email: string) => post<MessageResponse>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, new_password: string) =>
+    post<void>('/auth/reset-password', { token, new_password }),
+
+  verifyEmail: (token: string) => post<void>('/auth/verify-email', { token }),
+
+  resendVerification: (email: string) =>
+    post<MessageResponse>('/auth/resend-verification', { email }),
+
   // --- Doctors (public / patient) ---
   searchDoctors: (specialization?: string) =>
     get<Doctor[]>(`/doctors${specialization ? `?specialization=${encodeURIComponent(specialization)}` : ''}`),
@@ -269,6 +286,21 @@ export const api = {
 
   configureWorkingHours: (doctorId: string, workingHours: WorkingHoursInput[]) =>
     post<WorkingHours[]>(`/admin/doctors/${doctorId}/schedule`, { working_hours: workingHours }),
+
+  listAuditLogs: (params: {
+    action?: string;
+    actor_id?: string;
+    patient_id?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') q.set(key, String(value));
+    });
+    const qs = q.toString();
+    return get<AuditLogPage>(`/admin/audit-logs${qs ? `?${qs}` : ''}`);
+  },
 
   createLeave: (doctorId: string, data: { leave_date: string; reason?: string }) =>
     post<DoctorLeave>(`/admin/doctors/${doctorId}/leaves`, data),

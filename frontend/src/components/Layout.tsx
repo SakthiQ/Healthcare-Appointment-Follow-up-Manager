@@ -1,5 +1,6 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { InfoBanner } from './ui';
 import type { UserRole } from '../api/types';
 
 const NAV_BY_ROLE: Record<UserRole, { to: string; label: string }[]> = {
@@ -7,15 +8,19 @@ const NAV_BY_ROLE: Record<UserRole, { to: string; label: string }[]> = {
     { to: '/patient', label: 'Dashboard' },
     { to: '/patient/doctors', label: 'Find a doctor' },
     { to: '/patient/appointments', label: 'My appointments' },
+    { to: '/account', label: 'Account' },
   ],
   DOCTOR: [
     { to: '/doctor', label: 'Dashboard' },
     { to: '/doctor/appointments', label: 'Appointments' },
+    { to: '/account', label: 'Account' },
   ],
   ADMIN: [
     { to: '/admin', label: 'Dashboard' },
     { to: '/admin/doctors', label: 'Doctors' },
     { to: '/admin/conflicts', label: 'Conflicted appointments' },
+    { to: '/admin/audit', label: 'Audit log' },
+    { to: '/account', label: 'Account' },
   ],
 };
 
@@ -68,6 +73,12 @@ export default function Layout() {
       </header>
 
       <main className="content">
+        {user && !user.email_verified ? (
+          <InfoBanner>
+            Your email address is not verified yet. <Link to="/account">Open your account</Link> to
+            send the confirmation link again.
+          </InfoBanner>
+        ) : null}
         <Outlet />
       </main>
     </div>
