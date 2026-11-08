@@ -4,6 +4,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import client_ip, get_current_user, rate_limited, rate_limited_per_user, require_role
 from services.auth_service import auth_service
+from services.invitation_service import invitation_service
 from schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -16,6 +17,7 @@ from schemas.auth import (
     UserResponse,
     VerifyEmailRequest,
 )
+from schemas.invitation import InvitationLookupRequest, InvitationLookupResponse
 from models.user import User, UserRole
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -143,6 +145,21 @@ def resend_verification(
     """Send a fresh verification link. Same answer for any address; limited per IP and email."""
     auth_service.resend_verification(db, req.email, client_ip(request))
     return _LINK_SENT
+
+
+@router.post(
+    "/invitations/lookup",
+    response_model=InvitationLookupResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limited("auth-token", "AUTH_TOKEN_RATE_LIMIT_PER_HOUR"))],
+)
+def lookup_invitation(
+    req: InvitationLookupRequest,
+    db: Session = Depends(get_db)
+):
+    """What the signup page shows for an invitation link (the invitee's email, role and
+    suggested name). Needs the link's token, so it reveals nothing to anyone else."""
+    return invitation_service.lookup(db, req.token)
 
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)

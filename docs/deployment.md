@@ -210,7 +210,8 @@ Once both halves are live:
 
 ## Accounts, email and the audit log
 
-- **Set `FRONTEND_BASE_URL`** to your Vercel URL. `render.yaml` lists it as a value you must supply; left at the default, every password-reset and verification email would link to `localhost`.
+- **Set `FRONTEND_BASE_URL`** to your Vercel URL. `render.yaml` lists it as a value you must supply; left at the default, every password-reset, verification and invitation email would link to `localhost`.
+- **Staff sign up through invitations.** An admin opens *Invitations* in the portal, enters a doctor's or admin's email, and the invitee finishes on the normal `/register` page. Without real SMTP the page still shows the link once after you send it, so you can hand it over yourself. `INVITATION_TTL_DAYS` (default 7) controls how long it works.
 - Reset and verification emails need real SMTP (section 5). With `DEMO_MODE=True` nothing is sent; to follow a link while demoing, run with `LOG_LEVEL=DEBUG` and read it from the mock provider's log line.
 - Turn on `REQUIRE_EMAIL_VERIFICATION` only once real email works, otherwise nobody can sign in.
 - The audit log is readable by admins on the **Audit log** page or at `GET /api/v1/admin/audit-logs`. Entries are never deleted by the application, so decide on a retention period and purge outside it if your rules require one.

@@ -13,14 +13,16 @@ class NotificationJobRepository:
         self,
         db: Session,
         appointment_id: Optional[str],
-        recipient_id: str,
+        recipient_id: Optional[str],
         notification_type: NotificationType,
         payload: Optional[str] = None,
         scheduled_for: Optional[datetime] = None,
+        recipient_email: Optional[str] = None,
     ) -> NotificationJob:
         job = NotificationJob(
             appointment_id=appointment_id,
             recipient_id=recipient_id,
+            recipient_email=recipient_email,
             notification_type=notification_type,
             status=NotificationStatus.PENDING,
             payload=payload,
@@ -35,16 +37,18 @@ class NotificationJobRepository:
         self,
         db: Session,
         appointment_id: Optional[str],
-        recipient_id: str,
+        recipient_id: Optional[str],
         notification_type: NotificationType,
         payload: Optional[str] = None,
         scheduled_for: Optional[datetime] = None,
+        recipient_email: Optional[str] = None,
     ) -> NotificationJob:
         """Like create_job but only flushes — caller controls the transaction
         boundary (used by DoctorLeaveService's single atomic transaction)."""
         job = NotificationJob(
             appointment_id=appointment_id,
             recipient_id=recipient_id,
+            recipient_email=recipient_email,
             notification_type=notification_type,
             status=NotificationStatus.PENDING,
             payload=payload,

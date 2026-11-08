@@ -27,7 +27,7 @@ class DoctorRepository:
             query = query.filter(Doctor.specialization.ilike(f"%{specialization.strip()}%"))
         return query.all()
 
-    def create_doctor(self, db: Session, user_id: str, specialization: str, slot_duration: int = 30, timezone: str = "UTC") -> Doctor:
+    def create_doctor(self, db: Session, user_id: str, specialization: str, slot_duration: int = 30, timezone: str = "UTC", commit: bool = True) -> Doctor:
         doctor = Doctor(
             user_id=user_id,
             specialization=specialization.strip(),
@@ -35,8 +35,11 @@ class DoctorRepository:
             timezone=timezone,
         )
         db.add(doctor)
-        db.commit()
-        db.refresh(doctor)
+        if commit:
+            db.commit()
+            db.refresh(doctor)
+        else:
+            db.flush()
         return doctor
 
     def update_doctor(self, db: Session, doctor: Doctor, specialization: Optional[str] = None, slot_duration: Optional[int] = None, is_active: Optional[bool] = None, timezone: Optional[str] = None) -> Doctor:

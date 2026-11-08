@@ -150,6 +150,21 @@ Working hours and leave dates are wall-clock values in the **doctor's** timezone
 - **Tokens**: random (256 bits), stored only as a SHA-256 hash, single use, expiring. The link in the queued email job is scrubbed from the database once the email is sent or has permanently failed, so a reset link does not sit in the jobs table.
 - The emails go through the same notification queue as everything else, so a mail outage never fails a registration or a reset request.
 
+### Staff invitations: one signup page for everyone
+
+Patients, doctors and admins all sign up on `/register`. What differs is where the role comes from:
+
+- **No invitation**: a patient. `POST /auth/register` ignores any other `role` unless `ALLOW_PRIVILEGED_SELF_REGISTRATION` is on (tests only).
+- **With an invitation** (`/register?invite=<token>`): the role, and for a doctor the specialisation, slot length and timezone, come from the invitation row an admin created. The request body's `role` is ignored, so a doctor or admin account cannot be obtained by editing the form.
+
+How it holds together:
+
+- `POST /admin/invitations` (admin only, rate limited per admin) stores a SHA-256 hash of a 256-bit token, queues an `INVITATION` email, and returns the link once. A newer invitation to the same address revokes the older one; an address that already has an account is a 409.
+- The invitee has no user row yet, so a notification job can be addressed to `recipient_email` instead of `recipient_id`. A CHECK constraint (`ck_notification_has_recipient`) keeps the old guarantee that every job has a recipient. The link is scrubbed from the job once the email is sent, like reset links.
+- `POST /auth/invitations/lookup` lets the signup page show the invited address and role. It needs the token, so it reveals nothing to anyone else, and it is rate limited.
+- Accepting runs in **one transaction**: the invitation row is locked (`FOR UPDATE` on PostgreSQL), then the user, the doctor profile and `used_at` are committed together. A failure leaves no half-made account and the link still works; two people presenting one link cannot both get an account (verified with 8 concurrent signups on PostgreSQL by `scripts/verify_postgres.py`). The email must match the invited address, and the account starts email-verified because following the emailed link proves control of it.
+- Invite, revoke and accept are written to the audit log (`invitation.create`, `invitation.revoke`, `invitation.accept`); never the token. Unaccepted invitations that expired more than 30 days ago are purged by the maintenance worker.
+
 ---
 
 ## 9. Rate Limiting

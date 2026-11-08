@@ -45,7 +45,7 @@ describe('Layout: navigation', () => {
   it.each([
     ['PATIENT', ['Dashboard', 'Find a doctor', 'My appointments', 'Account']],
     ['DOCTOR', ['Dashboard', 'Appointments', 'Account']],
-    ['ADMIN', ['Dashboard', 'Doctors', 'Conflicted appointments', 'Audit log', 'Account']],
+    ['ADMIN', ['Dashboard', 'Doctors', 'Invitations', 'Conflicted appointments', 'Audit log', 'Account']],
   ] as [UserRole, string[]][])('%s sees their own links, including Account', (role, labels) => {
     renderLayout(makeAuth({ user: makeUser({ role }) }));
     const nav = screen.getByRole('navigation', { name: 'Main' });

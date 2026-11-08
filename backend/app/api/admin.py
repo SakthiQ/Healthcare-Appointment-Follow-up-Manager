@@ -3,14 +3,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.dependencies import require_role
+from app.dependencies import rate_limited_per_user, require_role
 from models.user import User, UserRole
 from services.audit_service import audit_service
 from services.doctor_service import doctor_service
+from services.invitation_service import invitation_service
 from services.schedule_service import schedule_service
 from services.leave_service import leave_service
 from services.doctor_leave_service import doctor_leave_service
 from schemas.audit import AuditLogPageResponse
+from schemas.invitation import InvitationCreateRequest, InvitationCreatedResponse, InvitationResponse
 from schemas.doctor import (
     DoctorCreateRequest,
     DoctorUpdateRequest,
@@ -164,3 +166,41 @@ def list_audit_logs(
                                   "resource_id": resource_id}.items() if v},
     )
     return page
+
+@router.post("/invitations", response_model=InvitationCreatedResponse, status_code=status.HTTP_201_CREATED)
+def create_invitation(
+    req: InvitationCreateRequest,
+    current_user: User = Depends(rate_limited_per_user("invite", "INVITE_RATE_LIMIT_PER_HOUR", roles=(UserRole.ADMIN,))),
+    db: Session = Depends(get_db)
+):
+    """Invite a doctor or another admin by email. The invitee signs up on the normal signup
+    page and the role comes from this invitation. The link is emailed and also returned once,
+    so it can be handed over if email is not set up."""
+    result = invitation_service.invite(db, current_user, req)
+    audit_service.record(
+        db, "invitation.create", actor=current_user, resource_type="invitation",
+        resource_id=result.invitation.id, detail={"role": req.role, "email": result.invitation.email},
+    )
+    return result
+
+
+@router.get("/invitations", response_model=List[InvitationResponse], status_code=status.HTTP_200_OK)
+def list_invitations(
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Recent invitations with their status (pending, accepted, revoked, expired)."""
+    return invitation_service.list_invitations(db)
+
+
+@router.delete("/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invitation(
+    invitation_id: str,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Withdraw a pending invitation; its link stops working."""
+    invitation_service.revoke(db, invitation_id)
+    audit_service.record(
+        db, "invitation.revoke", actor=current_user, resource_type="invitation", resource_id=invitation_id,
+    )

@@ -79,7 +79,11 @@ export default function DoctorManagement() {
       <header className="page-head">
         <div>
           <h1>Doctors</h1>
-          <p className="muted">Create doctor accounts and configure their schedules.</p>
+          <p className="muted">
+            Create doctor accounts and configure their schedules, or{' '}
+            <Link to="/admin/invitations">invite a doctor by email</Link> so they choose their own
+            password.
+          </p>
         </div>
         <button
           type="button"

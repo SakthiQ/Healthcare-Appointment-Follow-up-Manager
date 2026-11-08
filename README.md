@@ -6,7 +6,7 @@ doctors record consultations and prescriptions and get an AI-generated post-visi
 summary for the patient; both sides get email notifications and Google Calendar sync;
 medication reminders are scheduled automatically from the prescription.
 
-Built across 13 phases (see `AGENT_PHASES.md`) against the spec in `AGENT_SPEC.md`. All
+Built in 13 phases against the original project brief. All
 13 are complete — see [Project status](#project-status) for exactly what that does and
 doesn't mean.
 
@@ -131,7 +131,8 @@ Summary:
 | `RATE_LIMITING_ENABLED`, `REGISTER_RATE_LIMIT_PER_HOUR`, `AI_RATE_LIMIT_PER_HOUR`, `PASSWORD_RESET_RATE_LIMIT_PER_HOUR`, `PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR`, `AUTH_TOKEN_RATE_LIMIT_PER_HOUR`, `CHANGE_PASSWORD_RATE_LIMIT_PER_HOUR` | Request limits (fixed one-hour windows, kept in the database) | optional (10 / 30 / 5 / 3 / 30 / 10 per hour) |
 | `FRONTEND_BASE_URL` | Origin the password-reset and email-verification links point at | **production** (default is `http://localhost:5173`) |
 | `REQUIRE_EMAIL_VERIFICATION` | Refuse login until the email address is verified | optional (default `False`, so the demo flow works) |
-| `PASSWORD_RESET_TOKEN_TTL_MINUTES`, `EMAIL_VERIFICATION_TOKEN_TTL_HOURS` | How long the emailed links work | optional (30 min / 24 h) |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES`, `EMAIL_VERIFICATION_TOKEN_TTL_HOURS`, `INVITATION_TTL_DAYS` | How long the emailed links work | optional (30 min / 24 h / 7 days) |
+| `INVITE_RATE_LIMIT_PER_HOUR` | Invitations one admin may send per hour | optional (30) |
 | `AUTH_COOKIE_MODE`, `VITE_AUTH_COOKIES` (frontend build) | Session in an httpOnly cookie instead of `localStorage` | optional; same-site deployments only, see [docs/system-design.md](docs/system-design.md) |
 | `CONSULTATION_EARLY_SUBMIT_MINUTES` | Reject consultations recorded too long before the appointment | optional; unset for the demo flow |
 | `NOTIFICATION_PROCESSING_TIMEOUT_MINUTES` | When a job abandoned by a crashed worker goes back in the queue | optional (default 30) |
@@ -173,10 +174,20 @@ python -m scripts.create_admin --email admin@yourclinic.com --name "Clinic Admin
 # prompts for the password (hidden); or set ADMIN_PASSWORD
 ```
 
-Once that admin exists, they create every doctor account via
-`POST /admin/doctors` (see [API documentation](#api-documentation)) — doctors never
-self-register. There are no seeded/demo credentials checked into this repo; the database
-itself is never committed (see `.gitignore`).
+Once that admin exists, they bring in staff in one of two ways (see
+[API documentation](#api-documentation)) — doctors and admins never pick their own role:
+
+- **Invite by email (recommended).** *Invitations* in the admin portal (or
+  `POST /admin/invitations`) emails a single-use link to `/register?invite=…`. The invitee
+  opens the **same signup page patients use**, chooses a password, and the account is created
+  with the role (and, for a doctor, the specialisation, slot length and timezone) stored in the
+  invitation. Nothing on the form can change it. Links expire after `INVITATION_TTL_DAYS`
+  (7), work once, and are stored only as a hash. If email is not set up, the admin is shown the
+  link once to hand over.
+- **Create directly.** `POST /admin/doctors` creates a doctor with a temporary password.
+
+There are no seeded/demo credentials checked into this repo; the database itself is never
+committed (see `.gitignore`).
 
 ## API documentation
 
@@ -187,12 +198,12 @@ schemas — always in sync with the code, unlike a hand-maintained list. The ful
 
 | Area | Base path | Notes |
 |---|---|---|
-| Auth | `/api/v1/auth` | register (patient-only, see above; rate-limited), login (throttled), logout, `me`, change-password, forgot-password, reset-password, verify-email, resend-verification |
+| Auth | `/api/v1/auth` | register (patients, or anyone holding an invitation link; rate-limited), `invitations/lookup`, login (throttled), logout, `me`, change-password, forgot-password, reset-password, verify-email, resend-verification |
 | Doctors (public) | `/api/v1/doctors` | search, profile, schedule, leaves, slots |
 | Slots & holds | `/api/v1/slots` | create/get/release a hold |
 | Appointments | `/api/v1/appointments` | book, list, get, reschedule, cancel |
 | AI & clinical | `/api/v1/appointments/{id}/...` | symptom-report, consultation, pre/post-visit AI summaries |
-| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, audit log (`GET /admin/audit-logs`) |
+| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, staff invitations (`/admin/invitations`), audit log (`GET /admin/audit-logs`) |
 
 ## Database schema
 
@@ -200,8 +211,8 @@ Full ERD, state machines, and constraints in `docs/database-design.md`. Core ent
 `User`, `Doctor` (+ `DoctorWorkingHours`, `DoctorLeave`), `Appointment` (+
 `AppointmentHold`), `SymptomReport`, `AISummary`, `Consultation` (+ `Prescription`,
 `Medication`), `NotificationJob`, `CalendarEvent`, plus `AuthToken` (password-reset and
-verification links), `AuditLog`, `RateLimit` and `LoginThrottle`. Schema is entirely migration-driven —
-8 Alembic revisions in `backend/alembic/versions/`, verified to apply cleanly from an
+verification links), `Invitation` (staff signup links), `AuditLog`, `RateLimit` and `LoginThrottle`. Schema is entirely migration-driven —
+9 Alembic revisions in `backend/alembic/versions/`, verified to apply cleanly from an
 empty database (see [Running tests](#running-tests)).
 
 The appointment state machine: `HELD → CONFIRMED → {RESCHEDULED, CANCELLED,
@@ -211,7 +222,7 @@ filtered to active statuses) — the database, not the application, is the final
 
 ## LLM prompts
 
-Taken verbatim from `AGENT_SPEC.md`'s "LLM Usage Guidance" and implemented in
+Taken verbatim from the original project brief's "LLM Usage Guidance" and implemented in
 `backend/providers/ai_provider.py`:
 
 **Pre-visit** — output validated against `{urgency: Low|Medium|High, chief_complaint: string, suggested_questions: [string, string, string]}`:
@@ -251,7 +262,7 @@ npm run typecheck && npm test && npm run build
 ```
 
 Backend tests use an isolated in-memory SQLite database (`tests/conftest.py`), not
-`DATABASE_URL`. **231 backend tests and 91 frontend tests, all passing** on the last
+`DATABASE_URL`. **249 backend tests and 104 frontend tests, all passing** on the last
 full run.
 
 SQLite has no row locks, exclusion constraints or real concurrency, so the PostgreSQL-only
@@ -312,9 +323,9 @@ Each entry gives the reasoning behind it.
 
 ## Project status
 
-All 13 phases in `AGENT_PHASES.md` are complete. **"Complete" here means:** every
+All 13 build phases are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 231/231
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 249/249
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app

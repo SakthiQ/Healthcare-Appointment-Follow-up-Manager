@@ -1,9 +1,10 @@
 """
 AI provider abstraction for pre-visit and post-visit summary generation.
 
-Prompt templates are taken verbatim from the LLM Usage Guidance in
-AGENT_SPEC.md so the documented contract and the implementation never drift
-apart. See docs/ai-design.md for the full write-up.
+Prompt templates are taken verbatim from the LLM Usage Guidance in the original
+project brief. They are reproduced in the README and docs/ai-design.md, so the
+documented contract and the implementation stay in step. See docs/ai-design.md
+for the full write-up.
 """
 import abc
 import logging
@@ -16,7 +17,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Exact prompt templates from AGENT_SPEC.md's "LLM Usage Guidance".
+# Exact prompt templates from the project brief's "LLM Usage Guidance".
 PRE_VISIT_PROMPT_TEMPLATE = (
     "Analyse these symptoms and return: urgency level (Low / Medium / High), "
     "chief complaint, and three suggested questions for the doctor. "

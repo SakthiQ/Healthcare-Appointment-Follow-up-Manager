@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import bcrypt
@@ -22,6 +24,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         )
     except Exception:
         return False
+
+
+def generate_token() -> str:
+    """A random, URL-safe, single-use token (256 bits) for emailed links."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """What is stored instead of the token: a database leak must not yield usable links."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

@@ -4,19 +4,23 @@ import math
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.datetime_utils import ensure_utc
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, hash_token, verify_password, create_access_token
 from app.exceptions import ConflictError, ForbiddenError, TooManyRequestsError, UnauthorizedError, ValidationError
 from models.notification import NotificationType
 from models.security import AuthTokenPurpose
 from models.user import User, UserRole
 from repositories.auth_token_repository import auth_token_repository
+from repositories.doctor_repository import doctor_repository
+from repositories.invitation_repository import invitation_repository
 from repositories.login_throttle_repository import login_throttle_repository
 from repositories.user_repository import user_repository
 from schemas.auth import UserRegisterRequest, UserLoginRequest, TokenResponse, UserResponse
 from services.audit_service import audit_service
+from services.invitation_service import INVALID_INVITATION_MESSAGE
 from services.notification_service import notification_service
 from services.rate_limit_service import rate_limit_service
 
@@ -30,7 +34,7 @@ def _throttle_key(email: str, client_ip: str) -> str:
 
 
 def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hash_token(token)
 
 
 @lru_cache(maxsize=1)
@@ -54,6 +58,9 @@ class AuthService:
         )
 
     def register_user(self, db: Session, req: UserRegisterRequest) -> UserResponse:
+        if req.invite_token:
+            return self._register_from_invitation(db, req)
+
         # SECURITY: public self-registration must only ever create PATIENT
         # accounts. Doctor accounts are created by an admin (POST
         # /admin/doctors); admin accounts have no self-service path at all.
@@ -90,6 +97,52 @@ class AuthService:
 
         audit_service.record(db, "user.register", actor=user, resource_type="user", resource_id=user.id)
         self._send_verification_email(db, user)
+        return UserResponse.model_validate(user)
+
+    def _register_from_invitation(self, db: Session, req: UserRegisterRequest) -> UserResponse:
+        """Create an account from an invitation link: one signup path for everyone.
+
+        The role (and a doctor's profile) come from the invitation, never from the request,
+        so nobody can pick their own privileges. The user, the doctor profile and the spent
+        invitation are written in ONE transaction: either all of it happens or none of it,
+        and the link keeps working if anything fails. Following the link proves the person
+        controls the address, so the account starts out email-verified.
+        """
+        now = datetime.now(timezone.utc)
+        invitation = invitation_repository.get_usable(db, hash_token(req.invite_token), now, for_update=True)
+        if invitation is None:
+            raise ValidationError(INVALID_INVITATION_MESSAGE)
+        if req.email.strip().lower() != invitation.email:
+            raise ValidationError("Use the email address this invitation was sent to.")
+        if user_repository.get_by_email(db, invitation.email):
+            raise ConflictError("A user with this email already exists.")
+
+        role = UserRole(invitation.role)
+        invitation_id = invitation.id
+        try:
+            user = user_repository.create(
+                db=db, email=invitation.email, password_hash=hash_password(req.password),
+                full_name=req.full_name, role=role, email_verified=True, commit=False,
+            )
+            if role == UserRole.DOCTOR:
+                doctor_repository.create_doctor(
+                    db, user.id, invitation.specialization,
+                    slot_duration=invitation.slot_duration_minutes or 30,
+                    timezone=invitation.timezone or "UTC", commit=False,
+                )
+            invitation.used_at = now
+            db.commit()
+        except IntegrityError:
+            # Someone registered this address between the check above and the commit.
+            db.rollback()
+            raise ConflictError("A user with this email already exists.")
+
+        db.refresh(user)
+        audit_service.record(
+            db, "invitation.accept", actor=user, resource_type="invitation", resource_id=invitation_id,
+            detail={"role": role.value},
+        )
+        audit_service.record(db, "user.register", actor=user, resource_type="user", resource_id=user.id)
         return UserResponse.model_validate(user)
 
     def login_user(self, db: Session, req: UserLoginRequest, client_ip: str = "unknown") -> TokenResponse:

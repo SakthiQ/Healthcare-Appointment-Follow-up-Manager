@@ -26,7 +26,7 @@ AIService
 
 ## Prompt templates
 
-Taken verbatim from AGENT_SPEC.md's "LLM Usage Guidance" (`backend/providers/ai_provider.py`):
+Taken verbatim from the original project brief's "LLM Usage Guidance" (`backend/providers/ai_provider.py`):
 
 **Pre-visit:**
 > Analyse these symptoms and return: urgency level (Low / Medium / High), chief complaint, and three suggested questions for the doctor. Symptoms: `<symptoms>`
