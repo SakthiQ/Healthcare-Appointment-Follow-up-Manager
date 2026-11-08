@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { jsonResponse } from '../test/helpers';
 
+// Generated per run: a throwaway value, not a credential committed to the repository.
+const NEW_PASSWORD = `pw-${Math.random().toString(36).slice(2, 10)}`;
+
 /** The client reads its mode from the build environment when the module loads, so each
  *  test loads a fresh copy under the mode it wants. */
 async function loadClient(cookieMode: boolean) {
@@ -182,9 +185,9 @@ describe('account endpoints', () => {
     await api.resendVerification('a@b.co');
     expect(lastRequest(fetchMock).url).toBe('/api/v1/auth/resend-verification');
 
-    await api.resetPassword('tok', 'new-pass-1');
+    await api.resetPassword('tok', NEW_PASSWORD);
     expect(lastRequest(fetchMock).url).toBe('/api/v1/auth/reset-password');
-    expect(JSON.parse(lastRequest(fetchMock).init.body as string)).toEqual({ token: 'tok', new_password: 'new-pass-1' });
+    expect(JSON.parse(lastRequest(fetchMock).init.body as string)).toEqual({ token: 'tok', new_password: NEW_PASSWORD });
 
     await api.verifyEmail('tok');
     expect(lastRequest(fetchMock).url).toBe('/api/v1/auth/verify-email');

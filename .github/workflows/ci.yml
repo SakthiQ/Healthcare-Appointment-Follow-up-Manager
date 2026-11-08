@@ -59,7 +59,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: postgres
+          # No password: this container exists only for the duration of the job and is
+          # reachable only from its runner, so there is no credential to protect or leak.
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: scratch
         ports:
           - 5432:5432
@@ -87,7 +89,7 @@ jobs:
       # interleave with a booking. It wipes the scratch database, which only exists in this job.
       - name: Verify the PostgreSQL-only guarantees
         env:
-          VERIFY_PG_URL: postgresql://postgres:postgres@localhost:5432/scratch
+          VERIFY_PG_URL: postgresql://postgres@localhost:5432/scratch
           VERIFY_PG_WIPE: "yes"
         run: python scripts/verify_postgres.py
 

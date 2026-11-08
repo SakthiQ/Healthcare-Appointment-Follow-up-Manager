@@ -6,7 +6,7 @@ applies, overlapping appointments are rejected by the database, concurrent booki
 holds resolve to one winner, and a leave cannot interleave with a booking.
 
     cd backend
-    VERIFY_PG_URL=postgresql://user:pass@host/scratch_db VERIFY_PG_WIPE=yes python scripts/verify_postgres.py
+    VERIFY_PG_URL="postgresql://USER:PASSWORD@HOST/SCRATCH_DB" VERIFY_PG_WIPE=yes python scripts/verify_postgres.py
 
 *** IT DROPS AND RECREATES THE `public` SCHEMA OF THE DATABASE YOU POINT IT AT. ***
 Use an empty scratch database or a throwaway branch (e.g. a Neon branch), never a real one.
@@ -16,7 +16,7 @@ If the server has the `btree_gist` extension (Neon, Supabase and Render Postgres
 real migration is applied and the per-doctor exclusion constraint is checked in full;
 otherwise a variant without the doctor-equality column is used and that is reported.
 """
-import os, subprocess, sys, threading, time
+import os, secrets, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time as dtime, timedelta, timezone
 
@@ -30,6 +30,10 @@ os.environ.update(DATABASE_URL=PG, ALLOW_PRIVILEGED_SELF_REGISTRATION="True", EN
 sys.path.insert(0, BACKEND)
 
 import psycopg2
+
+# Throwaway passwords for the users this script creates, generated per run.
+TEST_PASSWORD = 'pw-' + secrets.token_hex(8)
+RESET_PASSWORD = TEST_PASSWORD + '-reset'
 
 results = []
 
@@ -151,8 +155,8 @@ client.__enter__()
 
 
 def mk(email, role):
-    client.post("/api/v1/auth/register", json={"email": email, "password": "password123", "full_name": email.split("@")[0], "role": role})
-    token = client.post("/api/v1/auth/login", json={"email": email, "password": "password123"}).json()["access_token"]
+    client.post("/api/v1/auth/register", json={"email": email, "password": TEST_PASSWORD, "full_name": email.split("@")[0], "role": role})
+    token = client.post("/api/v1/auth/login", json={"email": email, "password": TEST_PASSWORD}).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -160,7 +164,7 @@ admin = mk("admin@pg.com", "ADMIN")
 
 
 def new_doctor(tag):
-    doc = client.post("/api/v1/admin/doctors", json={"email": f"doc_{tag}@pg.com", "password": "password123", "full_name": f"Dr {tag}",
+    doc = client.post("/api/v1/admin/doctors", json={"email": f"doc_{tag}@pg.com", "password": TEST_PASSWORD, "full_name": f"Dr {tag}",
                                                      "specialization": "Cardiology", "slot_duration_minutes": 30}, headers=admin).json()
     client.post(f"/api/v1/admin/doctors/{doc['id']}/schedule", json={"working_hours": [
         {"day_of_week": d, "start_time": "09:00:00", "end_time": "12:00:00", "is_active": True} for d in range(7)]}, headers=admin)
@@ -265,13 +269,13 @@ for i in range(6):
 check("reschedule racing leave creation never deadlocks or 500s (6 rounds)", all(c < 500 for c in errors), f"statuses={sorted(errors)}")
 
 # throttle + logout + timezone path on PostgreSQL
-bad = [client.post("/api/v1/auth/login", json={"email": "p0@pg.com", "password": "nope-nope"}).status_code for _ in range(6)]
+bad = [client.post("/api/v1/auth/login", json={"email": "p0@pg.com", "password": TEST_PASSWORD + "-wrong"}).status_code for _ in range(6)]
 check("login throttle works on PostgreSQL (5x 401 then 429)", bad[:5] == [401] * 5 and bad[5] == 429, f"{bad}")
-tok = client.post("/api/v1/auth/login", json={"email": "p1@pg.com", "password": "password123"}).json()["access_token"]
+tok = client.post("/api/v1/auth/login", json={"email": "p1@pg.com", "password": TEST_PASSWORD}).json()["access_token"]
 h = {"Authorization": f"Bearer {tok}"}
 client.post("/api/v1/auth/logout", headers=h)
 check("logout revokes the token on PostgreSQL", client.get("/api/v1/auth/me", headers=h).status_code == 401)
-ist = client.post("/api/v1/admin/doctors", json={"email": "doc_ist@pg.com", "password": "password123", "full_name": "Dr IST",
+ist = client.post("/api/v1/admin/doctors", json={"email": "doc_ist@pg.com", "password": TEST_PASSWORD, "full_name": "Dr IST",
                                                  "specialization": "Cardiology", "timezone": "Asia/Kolkata"}, headers=admin).json()
 check("per-doctor timezone round-trips on PostgreSQL", ist.get("timezone") == "Asia/Kolkata")
 
@@ -283,9 +287,9 @@ client.post("/api/v1/auth/forgot-password", json={"email": "p5@pg.com"})
 payload = sql("SELECT payload FROM notification_jobs WHERE notification_type = 'PASSWORD_RESET' "
               "ORDER BY created_at DESC LIMIT 1", fetch=True)[0][0]
 reset_token = parse_qs(urlparse(json.loads(payload)["link"]).query)["token"][0]
-reset = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": "reset-pass-99"})
-relogin = client.post("/api/v1/auth/login", json={"email": "p5@pg.com", "password": "reset-pass-99"})
-reuse = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": "another-pass-1"})
+reset = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": RESET_PASSWORD})
+relogin = client.post("/api/v1/auth/login", json={"email": "p5@pg.com", "password": RESET_PASSWORD})
+reuse = client.post("/api/v1/auth/reset-password", json={"token": reset_token, "new_password": RESET_PASSWORD + "-again"})
 check("password reset works end to end on PostgreSQL (and the link is single use)",
       (reset.status_code, relogin.status_code, reuse.status_code) == (204, 200, 422),
       f"reset={reset.status_code} login={relogin.status_code} reuse={reuse.status_code}")
