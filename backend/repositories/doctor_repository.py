@@ -6,8 +6,15 @@ from models.doctor import Doctor, DoctorWorkingHours, DoctorLeave
 
 
 class DoctorRepository:
-    def get_by_id(self, db: Session, doctor_id: str) -> Optional[Doctor]:
-        return db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    def get_by_id(self, db: Session, doctor_id: str, with_for_update: bool = False) -> Optional[Doctor]:
+        """with_for_update locks the doctor row until the transaction ends. Booking,
+        rescheduling and leave creation all take it first, so a leave and a booking
+        for the same doctor cannot interleave: whichever starts second waits, then
+        sees the other's committed result. No-op on SQLite."""
+        query = db.query(Doctor).filter(Doctor.id == doctor_id)
+        if with_for_update and db.bind and db.bind.dialect.name != "sqlite":
+            query = query.with_for_update().populate_existing()
+        return query.first()
 
     def get_by_user_id(self, db: Session, user_id: str) -> Optional[Doctor]:
         return db.query(Doctor).filter(Doctor.user_id == user_id).first()
@@ -20,24 +27,27 @@ class DoctorRepository:
             query = query.filter(Doctor.specialization.ilike(f"%{specialization.strip()}%"))
         return query.all()
 
-    def create_doctor(self, db: Session, user_id: str, specialization: str, slot_duration: int = 30) -> Doctor:
+    def create_doctor(self, db: Session, user_id: str, specialization: str, slot_duration: int = 30, timezone: str = "UTC") -> Doctor:
         doctor = Doctor(
             user_id=user_id,
             specialization=specialization.strip(),
-            slot_duration_minutes=slot_duration
+            slot_duration_minutes=slot_duration,
+            timezone=timezone,
         )
         db.add(doctor)
         db.commit()
         db.refresh(doctor)
         return doctor
 
-    def update_doctor(self, db: Session, doctor: Doctor, specialization: Optional[str] = None, slot_duration: Optional[int] = None, is_active: Optional[bool] = None) -> Doctor:
+    def update_doctor(self, db: Session, doctor: Doctor, specialization: Optional[str] = None, slot_duration: Optional[int] = None, is_active: Optional[bool] = None, timezone: Optional[str] = None) -> Doctor:
         if specialization is not None:
             doctor.specialization = specialization.strip()
         if slot_duration is not None:
             doctor.slot_duration_minutes = slot_duration
         if is_active is not None:
             doctor.is_active = is_active
+        if timezone is not None:
+            doctor.timezone = timezone
         db.commit()
         db.refresh(doctor)
         return doctor

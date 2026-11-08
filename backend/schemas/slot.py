@@ -13,6 +13,7 @@ class SlotGenerationResponse(BaseModel):
     doctor_id: str
     target_date: date
     slot_duration_minutes: int
+    timezone: str = "UTC"
     total_slots: int
     available_slots: int
     slots: List[SlotItem]

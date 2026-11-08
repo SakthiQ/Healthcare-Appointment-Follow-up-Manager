@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from models.user import UserRole
 
 
@@ -11,6 +11,15 @@ class UserRegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=2, description="User full name")
     role: UserRole = Field(default=UserRole.PATIENT, description="User role: PATIENT, DOCTOR, ADMIN")
     specialization: Optional[str] = Field(default=None, description="Required if role is DOCTOR")
+
+    @field_validator("password")
+    @classmethod
+    def _password_fits_bcrypt(cls, value: str) -> str:
+        # bcrypt only reads the first 72 bytes: older versions silently ignore the
+        # rest (a longer password is weaker than it looks), newer ones raise.
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes (bcrypt limit).")
+        return value
 
 
 class UserLoginRequest(BaseModel):

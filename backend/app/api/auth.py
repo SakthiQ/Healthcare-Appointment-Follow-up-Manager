@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from app.config import settings
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
@@ -21,10 +22,39 @@ def register_user(
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 def login_user(
     req: UserLoginRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
-    """Authenticate user credentials and return JWT token."""
-    return auth_service.login_user(db, req)
+    """Authenticate user credentials and return JWT token. Repeated failures from
+    one client IP for one email are locked out with HTTP 429. In cookie mode the token
+    is set as an httpOnly cookie and the body's access_token is left empty."""
+    client_ip = request.client.host if request.client else "unknown"
+    result = auth_service.login_user(db, req, client_ip=client_ip)
+    if settings.AUTH_COOKIE_MODE:
+        response.set_cookie(
+            key=settings.AUTH_COOKIE_NAME,
+            value=result.access_token,
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            httponly=True,
+            secure=settings.AUTH_COOKIE_SECURE,
+            samesite=settings.AUTH_COOKIE_SAMESITE,
+            path="/",
+        )
+        result.access_token = ""
+    return result
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout_user(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Invalidate every access token issued to the current user (all devices) and
+    clear the session cookie."""
+    auth_service.logout_user(db, current_user)
+    response.delete_cookie(settings.AUTH_COOKIE_NAME, path="/")
 
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)

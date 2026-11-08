@@ -55,7 +55,10 @@ class AppointmentService:
             start_time = ensure_utc(hold.start_time)
             end_time = ensure_utc(hold.end_time)
 
-            doctor = doctor_repository.get_by_id(db, doctor_profile_id)
+            # Lock order everywhere: doctor row, then appointment rows. Held until
+            # the commit below, so a concurrent leave creation cannot slip in
+            # between the schedule check and the insert.
+            doctor = doctor_repository.get_by_id(db, doctor_profile_id, with_for_update=True)
             if not doctor:
                 raise NotFoundError("Doctor profile not found.")
 
@@ -77,10 +80,14 @@ class AppointmentService:
                 if overlapping:
                     raise ConflictError("Slot has already been booked by another user.")
 
-                # Deactivate hold atomically
-                hold_repository.deactivate(db, hold)
+                # Release the hold and insert the appointment in ONE transaction:
+                # the hold is only flushed here and is committed by the
+                # appointment insert below. If that insert loses a race (409) the
+                # rollback also restores the hold, so the patient keeps it
+                # instead of ending up with neither a hold nor an appointment.
+                hold_repository.deactivate_no_commit(db, hold)
 
-                # Create confirmed appointment
+                # Create confirmed appointment (commits hold release + insert)
                 appt = appointment_repository.create(
                     db=db,
                     patient_id=patient_id,
@@ -107,7 +114,8 @@ class AppointmentService:
         if start_time <= now:
             raise ValidationError("Cannot book an appointment in the past.")
 
-        doctor = doctor_repository.get_by_id(db, doctor_profile_id)
+        # Doctor row first, held until the commit below (see the hold path above).
+        doctor = doctor_repository.get_by_id(db, doctor_profile_id, with_for_update=True)
         if not doctor:
             raise NotFoundError("Doctor profile not found.")
 
@@ -206,10 +214,14 @@ class AppointmentService:
 
     def _safe_queue_cancellation_notifications(self, db: Session, appt: Appointment) -> None:
         try:
-            notification_service.supersede_pending_notifications(
-                db, appt.id, NotificationType.APPOINTMENT_REMINDER,
-                reason="Superseded: appointment cancelled.",
-            )
+            # An unsent confirmation would otherwise go out for an appointment
+            # that no longer exists (worker backlog, or booking and cancelling
+            # within one poll interval).
+            for obsolete_type in (NotificationType.APPOINTMENT_REMINDER, NotificationType.BOOKING_CONFIRMATION):
+                notification_service.supersede_pending_notifications(
+                    db, appt.id, obsolete_type,
+                    reason="Superseded: appointment cancelled.",
+                )
             payload = {"appointment_id": appt.id, "original_start_time": appt.start_time.isoformat()}
             for recipient_id in (appt.patient_id, appt.doctor_id):
                 notification_service.queue_notification(
@@ -223,6 +235,14 @@ class AppointmentService:
     def reschedule_appointment(
         self, db: Session, appointment_id: str, user: User, req: AppointmentRescheduleRequest
     ) -> AppointmentResponse:
+        appt = appointment_repository.get_by_id(db, appointment_id)
+        if not appt:
+            raise NotFoundError("Appointment not found.")
+        # Same lock order as booking and leave creation (doctor row, then
+        # appointment row); locking the appointment first could deadlock with a
+        # leave creation that holds the doctor row and wants this appointment.
+        if appt.doctor_profile_id:
+            doctor_repository.get_by_id(db, appt.doctor_profile_id, with_for_update=True)
         appt = appointment_repository.get_by_id(db, appointment_id, with_for_update=True)
         if not appt:
             raise NotFoundError("Appointment not found.")

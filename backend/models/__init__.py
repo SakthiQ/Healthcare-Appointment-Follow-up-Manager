@@ -14,6 +14,7 @@ from models.clinical import (
 )
 from models.notification import NotificationJob, NotificationType, NotificationStatus
 from models.calendar import CalendarEvent, CalendarSyncStatus, CalendarOperation
+from models.security import LoginThrottle
 
 __all__ = [
     "Base",
@@ -38,4 +39,5 @@ __all__ = [
     "CalendarEvent",
     "CalendarSyncStatus",
     "CalendarOperation",
+    "LoginThrottle",
 ]

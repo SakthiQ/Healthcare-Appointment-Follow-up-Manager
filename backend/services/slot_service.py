@@ -1,16 +1,20 @@
-from datetime import date, datetime, time, timedelta, timezone
-from typing import List, Tuple
+from datetime import date, datetime, timedelta, timezone
+from typing import List
 from sqlalchemy.orm import Session
-from app.exceptions import NotFoundError, ValidationError
+from app.exceptions import NotFoundError
 from repositories.doctor_repository import doctor_repository
 from repositories.hold_repository import hold_repository
 from schemas.slot import SlotItem, SlotGenerationResponse
 
 
-from app.core.datetime_utils import ensure_utc
+from app.core.datetime_utils import ensure_utc, get_zone, local_day_bounds_utc, local_to_utc
 
 
 class SlotService:
+    """Working hours and leave dates are wall-clock values in the DOCTOR's timezone
+    (Doctor.timezone); slots, holds and appointments are absolute instants stored in
+    UTC. Every conversion between the two goes through the doctor's zone here."""
+
     def generate_slots(
         self, db: Session, doctor_id: str, target_date: date
     ) -> SlotGenerationResponse:
@@ -20,27 +24,25 @@ class SlotService:
             raise NotFoundError("Doctor not found.")
 
         duration = doctor.slot_duration_minutes
-        if not doctor.is_active:
+        zone = get_zone(doctor.timezone)
+
+        def empty() -> SlotGenerationResponse:
             return SlotGenerationResponse(
                 doctor_id=doctor_id,
                 target_date=target_date,
                 slot_duration_minutes=duration,
+                timezone=str(zone),
                 total_slots=0,
                 available_slots=0,
                 slots=[]
             )
 
-        # 2. Check Doctor Leave
-        leave = doctor_repository.get_leave_by_date(db, doctor_id, target_date)
-        if leave:
-            return SlotGenerationResponse(
-                doctor_id=doctor_id,
-                target_date=target_date,
-                slot_duration_minutes=duration,
-                total_slots=0,
-                available_slots=0,
-                slots=[]
-            )
+        if not doctor.is_active:
+            return empty()
+
+        # 2. Check Doctor Leave (target_date is the doctor's local calendar date)
+        if doctor_repository.get_leave_by_date(db, doctor_id, target_date):
+            return empty()
 
         # 3. Get Working Hours for day_of_week (0=Monday, 6=Sunday)
         day_of_week = target_date.weekday()
@@ -48,18 +50,10 @@ class SlotService:
         day_hours = [h for h in all_hours if h.day_of_week == day_of_week and h.is_active]
 
         if not day_hours:
-            return SlotGenerationResponse(
-                doctor_id=doctor_id,
-                target_date=target_date,
-                slot_duration_minutes=duration,
-                total_slots=0,
-                available_slots=0,
-                slots=[]
-            )
+            return empty()
 
         # 4. Generate candidate time intervals
-        day_start = datetime.combine(target_date, time(0, 0), tzinfo=timezone.utc)
-        day_end = datetime.combine(target_date + timedelta(days=1), time(0, 0), tzinfo=timezone.utc)
+        day_start, day_end = local_day_bounds_utc(target_date, zone)
 
         # Fetch active holds and active appointments for doctor on target date
         active_holds = hold_repository.get_active_holds_for_doctor_date(db, doctor_id, day_start, day_end)
@@ -73,12 +67,14 @@ class SlotService:
 
         candidate_slots: List[SlotItem] = []
         for wh in day_hours:
-            curr_start = datetime.combine(target_date, wh.start_time, tzinfo=timezone.utc)
-            wh_end = datetime.combine(target_date, wh.end_time, tzinfo=timezone.utc)
+            # Converted to UTC before stepping, so each slot is exactly `duration`
+            # minutes long even across a daylight-saving change.
+            curr_start = local_to_utc(target_date, wh.start_time, zone)
+            wh_end = local_to_utc(target_date, wh.end_time, zone)
 
             while curr_start + timedelta(minutes=duration) <= wh_end:
                 curr_end = curr_start + timedelta(minutes=duration)
-                
+
                 # Check overlap with holds or appointments
                 is_avail = True
                 for occ_start, occ_end in occupied_intervals:
@@ -99,6 +95,7 @@ class SlotService:
             doctor_id=doctor_id,
             target_date=target_date,
             slot_duration_minutes=duration,
+            timezone=str(zone),
             total_slots=len(candidate_slots),
             available_slots=available_count,
             slots=candidate_slots
@@ -112,10 +109,12 @@ class SlotService:
         if not doctor or not doctor.is_active:
             return False
 
+        zone = get_zone(doctor.timezone)
         start_time = ensure_utc(start_time)
         end_time = ensure_utc(end_time)
 
-        target_date = start_time.date()
+        # Which day it is, and which working hours apply, is decided in the doctor's zone.
+        target_date = start_time.astimezone(zone).date()
         if doctor_repository.get_leave_by_date(db, doctor_id, target_date):
             return False
 
@@ -130,8 +129,8 @@ class SlotService:
         day_hours = [h for h in all_hours if h.day_of_week == day_of_week and h.is_active]
 
         for wh in day_hours:
-            wh_start = datetime.combine(target_date, wh.start_time, tzinfo=timezone.utc)
-            wh_end = datetime.combine(target_date, wh.end_time, tzinfo=timezone.utc)
+            wh_start = local_to_utc(target_date, wh.start_time, zone)
+            wh_end = local_to_utc(target_date, wh.end_time, zone)
             if start_time >= wh_start and end_time <= wh_end:
                 return True
 

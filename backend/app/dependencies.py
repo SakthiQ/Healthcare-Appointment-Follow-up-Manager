@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Optional
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -17,15 +17,29 @@ def get_settings() -> Settings:
     return settings
 
 
+# A cross-site page can make the browser attach the session cookie to a request, but it
+# cannot add a custom header without a CORS preflight, which only allow-listed origins
+# pass. Requiring this header on state-changing cookie-authenticated requests is the CSRF
+# defence (alongside the cookie's SameSite attribute). Bearer-token requests need none:
+# the browser never attaches those by itself.
+CSRF_HEADER = "X-CSRF-Protection"
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """Dependency to extract and validate current authenticated user from JWT token."""
-    if not credentials or not credentials.credentials:
+    token = credentials.credentials if credentials and credentials.credentials else None
+    if not token and settings.AUTH_COOKIE_MODE:
+        token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+        if token and request.method not in _SAFE_METHODS and not request.headers.get(CSRF_HEADER):
+            raise ForbiddenError(f"Missing {CSRF_HEADER} header on a cookie-authenticated request.")
+    if not token:
         raise UnauthorizedError("Authentication token is required")
 
-    token = credentials.credentials
     payload = decode_access_token(token)
     
     user_id = payload.get("sub")
@@ -39,7 +53,24 @@ def get_current_user(
     if not user.is_active:
         raise UnauthorizedError("User account is inactive")
 
+    # Tokens issued before this field existed carry no "tv" and count as version 0.
+    if payload.get("tv", 0) != (user.token_version or 0):
+        raise UnauthorizedError("This session has been signed out. Please log in again.")
+
     return user
+
+
+def get_optional_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """For public endpoints whose response differs by caller: the signed-in user,
+    or None for anonymous callers and for a missing, expired or invalid token."""
+    try:
+        return get_current_user(request, credentials, db)
+    except (UnauthorizedError, ForbiddenError):
+        return None
 
 
 def require_role(*allowed_roles: UserRole):

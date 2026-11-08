@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 import logging
@@ -32,6 +33,13 @@ class ValidationError(AppException):
 
 
 
+class TooManyRequestsError(AppException):
+    """429. `retry_after_seconds`, when known, is sent as a Retry-After header."""
+    def __init__(self, message: str = "Too many requests", retry_after_seconds: Optional[int] = None):
+        super().__init__(message, status_code=status.HTTP_429_TOO_MANY_REQUESTS, error_code="TOO_MANY_REQUESTS")
+        self.retry_after_seconds = retry_after_seconds
+
+
 class UnauthorizedError(AppException):
     def __init__(self, message: str = "Unauthorized"):
         super().__init__(message, status_code=status.HTTP_401_UNAUTHORIZED, error_code="UNAUTHORIZED")
@@ -45,9 +53,14 @@ class ForbiddenError(AppException):
 async def app_exception_handler(request: Request, exc: AppException):
     """Handler for custom AppException hierarchy."""
     logger.warning(f"AppException: [{exc.error_code}] {exc.message} on {request.url.path}")
+    headers = {}
+    retry_after = getattr(exc, "retry_after_seconds", None)
+    if retry_after:
+        headers["Retry-After"] = str(retry_after)
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.message, "error_code": exc.error_code}
+        content={"detail": exc.message, "error_code": exc.error_code},
+        headers=headers or None,
     )
 
 
@@ -64,4 +77,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     if origin and settings.is_cors_origin_allowed(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
+        if settings.AUTH_COOKIE_MODE:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
     return response

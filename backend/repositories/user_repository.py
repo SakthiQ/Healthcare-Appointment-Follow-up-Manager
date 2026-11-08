@@ -5,6 +5,11 @@ from models.doctor import Doctor
 
 
 class UserRepository:
+    def bump_token_version(self, db: Session, user: User) -> None:
+        """Invalidate every access token issued to this user so far."""
+        user.token_version = (user.token_version or 0) + 1
+        db.commit()
+
     def get_by_id(self, db: Session, user_id: str) -> Optional[User]:
         return db.query(User).filter(User.id == user_id).first()
 

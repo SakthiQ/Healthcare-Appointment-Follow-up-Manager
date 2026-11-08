@@ -1,10 +1,13 @@
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional, List, Sequence
 from sqlalchemy.orm import Session
 from pydantic import ValidationError as PydanticValidationError
 
-from app.exceptions import NotFoundError, ForbiddenError, ValidationError, ConflictError
+from app.config import settings
+from app.core.datetime_utils import ensure_utc
+from app.exceptions import NotFoundError, ForbiddenError, ValidationError, ConflictError, TooManyRequestsError
 from models.user import User, UserRole
 from models.appointment import AppointmentStatus
 from models.clinical import AISummary, AISummaryType, AISummaryStatus
@@ -138,12 +141,15 @@ class AIService:
         if not report:
             raise ValidationError("Submit a symptom report before generating a pre-visit summary.")
 
+        # Read what the provider needs now: _run_generation ends the transaction
+        # before the slow call, which expires ORM objects.
+        symptoms = report.symptoms
         summary = self._run_generation(
             db=db,
             appointment_id=appointment_id,
             summary_type=AISummaryType.PRE_VISIT,
             output_model=PreVisitAIOutput,
-            call=lambda provider: provider.generate_pre_visit_summary(report.symptoms),
+            call=lambda provider: provider.generate_pre_visit_summary(symptoms),
         )
         return _summary_response(summary, patient)
 
@@ -176,6 +182,13 @@ class AIService:
         if appointment.status not in CONSULTABLE_STATUSES:
             raise ConflictError(
                 f"Cannot record a consultation for a {appointment.status.value.lower()} appointment."
+            )
+
+        early_window = settings.CONSULTATION_EARLY_SUBMIT_MINUTES
+        if early_window is not None and ensure_utc(appointment.start_time) - datetime.now(timezone.utc) > timedelta(minutes=early_window):
+            raise ConflictError(
+                f"This appointment has not started yet. A consultation can be recorded from "
+                f"{early_window} minutes before it begins."
             )
 
         existing = clinical_repository.get_consultation(db, appointment_id)
@@ -262,6 +275,7 @@ class AIService:
             for m in (prescription.medications if prescription else [])
         ]
         instructions = prescription.instructions if prescription else None
+        notes = consultation.notes  # see generate_pre_visit_summary
 
         summary = self._run_generation(
             db=db,
@@ -269,7 +283,7 @@ class AIService:
             summary_type=AISummaryType.POST_VISIT,
             output_model=PostVisitAIOutput,
             call=lambda provider: provider.generate_post_visit_summary(
-                consultation.notes,
+                notes,
                 medications=medications,
                 prescription_instructions=instructions,
             ),
@@ -295,7 +309,18 @@ class AIService:
     ):
         """`verify`, when given, receives the schema-valid output and returns an error
         message if its content is unacceptable (recorded as FAILED), else None."""
+        if clinical_repository.count_ai_summaries(db, appointment_id, summary_type) >= settings.AI_MAX_SUMMARIES_PER_APPOINTMENT:
+            raise TooManyRequestsError(
+                "The limit of AI summaries for this appointment has been reached. "
+                "Use the existing summary or contact the clinic."
+            )
+
         provider = self._provider()
+        # End the read transaction before the slow network call. Otherwise this
+        # request holds a pooled database connection for the whole LLM round trip
+        # (up to the provider timeout), and a handful of slow calls would exhaust
+        # the pool and stall every other request.
+        db.commit()
         try:
             raw_output = call(provider)
         except AIProviderError as exc:

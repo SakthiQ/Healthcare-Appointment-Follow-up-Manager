@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 from app.core.datetime_utils import UTCDateTime
-from sqlalchemy import Column, String, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, String, Boolean, Integer, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -23,6 +23,10 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.PATIENT, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Bumped on logout. Every access token carries the value it was issued under
+    # ("tv" claim) and is rejected once that no longer matches, so signing out
+    # invalidates a token that was copied or stolen, not just the browser's copy.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

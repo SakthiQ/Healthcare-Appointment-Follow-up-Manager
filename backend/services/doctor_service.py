@@ -18,6 +18,7 @@ class DoctorService:
             full_name=doctor.user.full_name,
             specialization=doctor.specialization,
             slot_duration_minutes=doctor.slot_duration_minutes,
+            timezone=doctor.timezone or "UTC",
             is_active=doctor.is_active,
             created_at=doctor.created_at
         )
@@ -40,7 +41,8 @@ class DoctorService:
             db=db,
             user_id=user.id,
             specialization=req.specialization,
-            slot_duration=req.slot_duration_minutes
+            slot_duration=req.slot_duration_minutes,
+            timezone=req.timezone,
         )
 
         return self._to_response(doctor)
@@ -55,7 +57,8 @@ class DoctorService:
             doctor=doctor,
             specialization=req.specialization,
             slot_duration=req.slot_duration_minutes,
-            is_active=req.is_active
+            is_active=req.is_active,
+            timezone=req.timezone,
         )
         return self._to_response(updated_doctor)
 

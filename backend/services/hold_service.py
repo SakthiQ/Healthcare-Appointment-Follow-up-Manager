@@ -16,11 +16,13 @@ class HoldService:
     def create_hold(
         self, db: Session, patient_id: str, req: HoldCreateRequest, hold_duration_minutes: int = 10
     ) -> HoldResponse:
-        # Ensure stale holds are expired first
-        hold_repository.expire_stale_holds(db)
-
         start_time = ensure_utc(req.start_time)
         end_time = ensure_utc(req.end_time)
+
+        # Free this slot of any expired hold that is still flagged active (it would
+        # trip the one-active-hold-per-slot index). Only this slot: nothing else
+        # needs a write here, and the expiry worker sweeps the rest.
+        hold_repository.expire_stale_holds_for_slot(db, req.doctor_id, start_time)
 
         now = datetime.now(timezone.utc)
         if start_time <= now:
@@ -59,18 +61,23 @@ class HoldService:
         return HoldResponse.model_validate(hold)
 
     def get_hold(self, db: Session, hold_id: str, user: User) -> HoldResponse:
-        hold_repository.expire_stale_holds(db)
+        # A read: no writes. An expired hold may still be flagged active until the
+        # expiry worker or the next hold on its slot sweeps it, so report what it
+        # effectively is.
         hold = hold_repository.get_by_id(db, hold_id)
         if not hold:
             raise NotFoundError("Hold not found.")
         if user.role != UserRole.ADMIN and hold.patient_id != user.id:
             raise ForbiddenError("Not authorized to view this hold.")
-        return HoldResponse.model_validate(hold)
+        response = HoldResponse.model_validate(hold)
+        response.is_active = bool(hold.is_active and ensure_utc(hold.expires_at) > datetime.now(timezone.utc))
+        return response
 
     def confirm_hold(self, db: Session, hold_id: str, patient_id: str) -> AppointmentHold:
         """Validate hold for confirmation. Does not create appointment DB entity (handled in Phase 6)."""
-        hold_repository.expire_stale_holds(db)
-        hold = hold_repository.get_by_id(db, hold_id)
+        # Locked until the appointment insert commits, so two concurrent confirms
+        # of one hold run one after the other and the second sees it released.
+        hold = hold_repository.get_by_id(db, hold_id, with_for_update=True)
         if not hold:
             raise NotFoundError("Hold not found.")
 
