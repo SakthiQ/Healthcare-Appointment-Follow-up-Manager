@@ -346,7 +346,7 @@ class AppointmentService:
             if patient_id:
                 appts = appointment_repository.list_for_patient(db, patient_id, status_filter=status_filter)
             elif doctor_id:
-                appts = appointment_repository.list_for_doctor(db, doctor_id, status_filter=status_filter)
+                appts = appointment_repository.list_for_doctor_any_id(db, doctor_id, status_filter=status_filter)
             else:
                 appts = appointment_repository.list_all(db, status_filter=status_filter)
 

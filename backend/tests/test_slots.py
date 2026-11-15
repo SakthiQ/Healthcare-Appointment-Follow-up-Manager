@@ -188,3 +188,68 @@ def test_successful_and_invalid_hold_confirmation(db_session, client):
     # Patient 2 attempts to confirm Patient 1's hold -> ForbiddenError
     with pytest.raises(ForbiddenError):
         hold_service.confirm_hold(db_session, hold_data["id"], patient_id=p2["id"])
+
+
+def _slot(day: date, hour: int, minute: int, minutes: int = 30):
+    start = datetime.combine(day, time(hour, minute), tzinfo=timezone.utc)
+    return start, start + timedelta(minutes=minutes)
+
+
+def _book(client, headers, doctor_id, start, end):
+    return client.post("/api/v1/appointments", json={
+        "doctor_id": doctor_id, "start_time": start.isoformat(), "end_time": end.isoformat()
+    }, headers=headers)
+
+
+def test_rescheduled_appointment_occupies_its_new_slot(client):
+    """The slot an appointment was moved INTO is taken: it must not be offered as
+    available, and nobody else may hold it (they could never confirm that hold)."""
+    doc, _, headers1, headers2 = setup_doctor_and_patient(client)
+    monday = get_next_monday() + timedelta(days=28)
+    nine, nine_end = _slot(monday, 9, 0)
+    ten, ten_end = _slot(monday, 10, 0)
+
+    appt = _book(client, headers1, doc["id"], nine, nine_end)
+    assert appt.status_code == 201, appt.text
+    moved = client.post(f"/api/v1/appointments/{appt.json()['id']}/reschedule", json={
+        "new_start_time": ten.isoformat(), "new_end_time": ten_end.isoformat()
+    }, headers=headers1)
+    assert moved.status_code == 200 and moved.json()["status"] == "RESCHEDULED"
+
+    slots = client.get(f"/api/v1/doctors/{doc['id']}/slots?date={monday.isoformat()}").json()
+    by_start = {datetime.fromisoformat(s["start_time"].replace("Z", "+00:00")): s["is_available"] for s in slots["slots"]}
+    assert by_start[ten] is False, "the slot the appointment moved into is occupied"
+    assert by_start[nine] is True, "the slot it moved out of is free again"
+    assert slots["available_slots"] == 3
+
+    hold = client.post("/api/v1/slots/holds", json={
+        "doctor_id": doc["id"], "start_time": ten.isoformat(), "end_time": ten_end.isoformat()
+    }, headers=headers2)
+    assert hold.status_code == 409
+
+
+def test_times_off_the_slot_grid_are_not_bookable(client):
+    """09:07-09:37 has the right length and is inside working hours, but it is not one of
+    the doctor's slots. Accepting it would take two real slots out of the day."""
+    doc, _, headers1, _ = setup_doctor_and_patient(client)
+    monday = get_next_monday() + timedelta(days=35)
+    off_start, off_end = _slot(monday, 9, 7)
+
+    assert _book(client, headers1, doc["id"], off_start, off_end).status_code == 422
+    hold = client.post("/api/v1/slots/holds", json={
+        "doctor_id": doc["id"], "start_time": off_start.isoformat(), "end_time": off_end.isoformat()
+    }, headers=headers1)
+    assert hold.status_code == 422
+
+    # A real slot still books, and it cannot be rescheduled onto an off-grid time either.
+    nine, nine_end = _slot(monday, 9, 0)
+    appt = _book(client, headers1, doc["id"], nine, nine_end)
+    assert appt.status_code == 201, appt.text
+    off_start, off_end = _slot(monday, 10, 15)
+    moved = client.post(f"/api/v1/appointments/{appt.json()['id']}/reschedule", json={
+        "new_start_time": off_start.isoformat(), "new_end_time": off_end.isoformat()
+    }, headers=headers1)
+    assert moved.status_code == 422
+
+    slots = client.get(f"/api/v1/doctors/{doc['id']}/slots?date={monday.isoformat()}").json()
+    assert slots["available_slots"] == 3  # only the one real booking is taken

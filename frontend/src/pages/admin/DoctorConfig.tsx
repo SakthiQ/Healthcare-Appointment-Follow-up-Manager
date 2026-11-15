@@ -110,6 +110,16 @@ export default function DoctorConfig() {
 
   async function handleToggleActive() {
     if (!doctorQuery.data) return;
+    // Deactivating cancels real appointments, so it is not a one-click action.
+    if (
+      doctorQuery.data.is_active &&
+      !window.confirm(
+        'Deactivate this doctor? They will be signed out and unable to sign in, and every ' +
+          'upcoming appointment will be marked conflicted and the patient notified.',
+      )
+    ) {
+      return;
+    }
     setProfileError(null);
     setNotice(null);
     setSavingProfile(true);
@@ -117,8 +127,8 @@ export default function DoctorConfig() {
       await api.setDoctorStatus(doctorId, !doctorQuery.data.is_active);
       setNotice(
         doctorQuery.data.is_active
-          ? 'Doctor deactivated — they no longer appear in patient search.'
-          : 'Doctor activated.',
+          ? 'Doctor deactivated — they can no longer sign in or be booked. Their upcoming appointments were marked conflicted and the patients notified.'
+          : 'Doctor activated — they can sign in and be booked again.',
       );
       doctorQuery.reload();
     } catch (err) {
