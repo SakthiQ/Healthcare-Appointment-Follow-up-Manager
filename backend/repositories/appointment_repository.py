@@ -1,5 +1,6 @@
 from typing import Optional, List
 from datetime import datetime, timezone
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from models.appointment import Appointment, AppointmentStatus
@@ -121,6 +122,28 @@ class AppointmentRepository:
             query = query.with_for_update()
         return query.all()
 
+    def get_active_appointments_for_doctor_from(
+        self,
+        db: Session,
+        doctor_profile_id: str,
+        from_time: datetime,
+        with_for_update: bool = False
+    ) -> List[Appointment]:
+        """Active (HELD/CONFIRMED/RESCHEDULED) appointments for a doctor profile that
+        have not started yet at `from_time`. Used when a doctor is deactivated."""
+        query = db.query(Appointment).filter(
+            Appointment.doctor_profile_id == doctor_profile_id,
+            Appointment.start_time > ensure_utc(from_time),
+            Appointment.status.in_([
+                AppointmentStatus.HELD,
+                AppointmentStatus.CONFIRMED,
+                AppointmentStatus.RESCHEDULED
+            ])
+        )
+        if with_for_update and db.bind and db.bind.dialect.name != "sqlite":
+            query = query.with_for_update()
+        return query.all()
+
     def reschedule(
         self, db: Session, appointment: Appointment, new_start_time: datetime, new_end_time: datetime
     ) -> Appointment:
@@ -148,6 +171,19 @@ class AppointmentRepository:
         self, db: Session, doctor_user_id: str, status_filter: Optional[AppointmentStatus] = None
     ) -> List[Appointment]:
         query = db.query(Appointment).filter(Appointment.doctor_id == doctor_user_id)
+        if status_filter:
+            query = query.filter(Appointment.status == status_filter)
+        return query.order_by(Appointment.start_time.asc()).all()
+
+    def list_for_doctor_any_id(
+        self, db: Session, doctor_id: str, status_filter: Optional[AppointmentStatus] = None
+    ) -> List[Appointment]:
+        """For the admin filter. Everywhere else in the API "doctor_id" is the doctor's
+        PROFILE id (doctors.id), so that is what an admin will pass; the doctor's user
+        id is accepted too, because appointment responses call that "doctor_id"."""
+        query = db.query(Appointment).filter(
+            or_(Appointment.doctor_profile_id == doctor_id, Appointment.doctor_id == doctor_id)
+        )
         if status_filter:
             query = query.filter(Appointment.status == status_filter)
         return query.order_by(Appointment.start_time.asc()).all()

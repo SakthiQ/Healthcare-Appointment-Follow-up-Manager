@@ -29,7 +29,7 @@ def create_appointment(
 
 @router.get("", response_model=List[AppointmentResponse], status_code=status.HTTP_200_OK)
 def list_appointments(
-    doctor_id: Optional[str] = Query(default=None, description="Filter by doctor ID (Admin only)"),
+    doctor_id: Optional[str] = Query(default=None, description="Filter by doctor profile ID, or the doctor's user ID (Admin only)"),
     patient_id: Optional[str] = Query(default=None, description="Filter by patient ID (Admin only)"),
     status_filter: Optional[AppointmentStatus] = Query(default=None, alias="status", description="Filter by appointment status"),
     current_user: User = Depends(get_current_user),

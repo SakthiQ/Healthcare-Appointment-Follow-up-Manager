@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timedelta, timezone
 import pytest
 
 
@@ -204,3 +204,128 @@ def test_leave_creation_retrieval_and_duplicate_prevention(client):
     assert r_get.status_code == 200
     assert len(r_get.json()) == 1
     assert r_get.json()[0]["leave_date"] == "2026-10-15"
+
+
+def test_doctor_login_email_and_account_id_are_for_admins_only(client):
+    """The doctor endpoints need no sign-in, so they must not hand out staff login emails."""
+    admin_headers = get_admin_headers(client)
+    patient_headers = get_patient_headers(client)
+    doc = client.post("/api/v1/admin/doctors", json={
+        "email": "private_doc@example.com", "password": "pass1234", "full_name": "Dr. Private",
+        "specialization": "Urology"
+    }, headers=admin_headers).json()
+    assert doc["email"] == "private_doc@example.com" and doc["user_id"]  # the admin who created it
+
+    for headers in (None, patient_headers):
+        listed = next(d for d in client.get("/api/v1/doctors", headers=headers).json() if d["id"] == doc["id"])
+        single = client.get(f"/api/v1/doctors/{doc['id']}", headers=headers).json()
+        for seen in (listed, single):
+            assert seen["email"] is None and seen["user_id"] is None
+            assert seen["full_name"] == "Dr. Private" and seen["specialization"] == "Urology"
+
+    listed = next(d for d in client.get("/api/v1/doctors", headers=admin_headers).json() if d["id"] == doc["id"])
+    single = client.get(f"/api/v1/doctors/{doc['id']}", headers=admin_headers).json()
+    for seen in (listed, single):
+        assert seen["email"] == "private_doc@example.com" and seen["user_id"] == doc["user_id"]
+
+
+def test_admin_doctor_list_includes_deactivated_doctors(client):
+    """Otherwise a deactivated doctor vanishes from the admin's list and cannot be found again."""
+    admin_headers = get_admin_headers(client)
+    doc = client.post("/api/v1/admin/doctors", json={
+        "email": "hidden_doc@example.com", "password": "pass1234", "full_name": "Dr. Hidden",
+        "specialization": "Oncology"
+    }, headers=admin_headers).json()
+    client.patch(f"/api/v1/admin/doctors/{doc['id']}/status?is_active=false", headers=admin_headers)
+
+    public_ids = [d["id"] for d in client.get("/api/v1/doctors").json()]
+    admin_view = {d["id"]: d for d in client.get("/api/v1/doctors", headers=admin_headers).json()}
+    assert doc["id"] not in public_ids
+    assert admin_view[doc["id"]]["is_active"] is False
+
+
+def test_doctor_password_over_the_bcrypt_limit_is_rejected_not_a_500(client):
+    admin_headers = get_admin_headers(client)
+    r = client.post("/api/v1/admin/doctors", json={
+        "email": "longpw_doc@example.com", "password": "x" * 73, "full_name": "Dr. Long",
+        "specialization": "GP"
+    }, headers=admin_headers)
+    assert r.status_code == 422
+
+
+def _doctor_with_one_booking(client, admin_headers, patient_headers, tag):
+    """A doctor working Mondays 09:00-12:00 with one future appointment."""
+    doc = client.post("/api/v1/admin/doctors", json={
+        "email": f"{tag}@example.com", "password": "docpassword123", "full_name": "Dr. Leaving",
+        "specialization": "Cardiology", "slot_duration_minutes": 30
+    }, headers=admin_headers).json()
+    client.post(f"/api/v1/admin/doctors/{doc['id']}/schedule", json={"working_hours": [
+        {"day_of_week": 0, "start_time": "09:00:00", "end_time": "12:00:00", "is_active": True}
+    ]}, headers=admin_headers)
+    today = date.today()
+    monday = today + timedelta(days=(7 - today.weekday()) % 7 or 7) + timedelta(days=49)
+    start = datetime.combine(monday, time(9, 0), tzinfo=timezone.utc)
+    booking = {"doctor_id": doc["id"], "start_time": start.isoformat(),
+               "end_time": (start + timedelta(minutes=30)).isoformat()}
+    r = client.post("/api/v1/appointments", json=booking, headers=patient_headers)
+    assert r.status_code == 201, r.text
+    return doc, r.json(), booking
+
+
+def test_deactivating_a_doctor_blocks_sign_in_and_resolves_upcoming_appointments(client, db_session):
+    """Deactivation is more than a search filter: the doctor can no longer sign in, and
+    patients are not left holding a confirmed appointment nobody will attend."""
+    from models.notification import NotificationJob, NotificationStatus, NotificationType
+    from services.notification_service import notification_service
+
+    admin_headers = get_admin_headers(client)
+    patient_headers = get_patient_headers(client)
+    doc, appt, booking = _doctor_with_one_booking(client, admin_headers, patient_headers, "leaving_doc")
+    login = {"email": "leaving_doc@example.com", "password": "docpassword123"}
+    doctor_headers = {"Authorization": f"Bearer {client.post('/api/v1/auth/login', json=login).json()['access_token']}"}
+    assert client.get("/api/v1/appointments", headers=doctor_headers).status_code == 200
+
+    r = client.patch(f"/api/v1/admin/doctors/{doc['id']}/status?is_active=false", headers=admin_headers)
+    assert r.status_code == 200 and r.json()["is_active"] is False
+
+    # The doctor is signed out and cannot sign back in.
+    assert client.get("/api/v1/appointments", headers=doctor_headers).status_code == 401
+    assert client.post("/api/v1/auth/login", json=login).status_code == 401
+
+    # The upcoming appointment is conflicted, and the patient is told.
+    assert client.get(f"/api/v1/appointments/{appt['id']}", headers=patient_headers).json()["status"] == "CONFLICTED"
+    jobs = db_session.query(NotificationJob).filter(NotificationJob.appointment_id == appt["id"]).all()
+    conflict_jobs = [j for j in jobs if j.notification_type == NotificationType.DOCTOR_LEAVE_CONFLICT]
+    assert len(conflict_jobs) == 1 and conflict_jobs[0].recipient_id == appt["patient_id"]
+    _, body = notification_service._build_content(db_session, conflict_jobs[0])
+    assert "no longer available" in body and "book a new appointment" in body
+    # Nothing still queued says the appointment is going ahead.
+    going_ahead = [j for j in jobs if j.notification_type in (
+        NotificationType.APPOINTMENT_REMINDER, NotificationType.BOOKING_CONFIRMATION)]
+    assert going_ahead and all(j.status == NotificationStatus.FAILED for j in going_ahead)
+
+    # No new bookings while deactivated.
+    assert client.post("/api/v1/appointments", json=booking, headers=patient_headers).status_code == 422
+
+    # Reactivating restores sign-in and booking. The conflicted appointment stays
+    # conflicted (the patient has been told), and its slot is free to book again.
+    r = client.patch(f"/api/v1/admin/doctors/{doc['id']}/status?is_active=true", headers=admin_headers)
+    assert r.status_code == 200 and r.json()["is_active"] is True
+    assert client.post("/api/v1/auth/login", json=login).status_code == 200
+    assert client.get("/api/v1/appointments", headers=doctor_headers).status_code == 401  # old session stays dead
+    assert client.get(f"/api/v1/appointments/{appt['id']}", headers=patient_headers).json()["status"] == "CONFLICTED"
+    assert client.post("/api/v1/appointments", json=booking, headers=patient_headers).status_code == 201
+
+
+def test_deactivating_through_the_update_endpoint_behaves_the_same(client):
+    admin_headers = get_admin_headers(client)
+    patient_headers = get_patient_headers(client)
+    doc, appt, _ = _doctor_with_one_booking(client, admin_headers, patient_headers, "put_doc")
+
+    r = client.put(f"/api/v1/admin/doctors/{doc['id']}", json={"is_active": False, "specialization": "Neurology"},
+                   headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["is_active"] is False and r.json()["specialization"] == "Neurology"
+    assert client.post("/api/v1/auth/login", json={
+        "email": "put_doc@example.com", "password": "docpassword123"}).status_code == 401
+    assert client.get(f"/api/v1/appointments/{appt['id']}", headers=patient_headers).json()["status"] == "CONFLICTED"

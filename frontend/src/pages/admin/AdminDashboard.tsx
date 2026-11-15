@@ -10,7 +10,8 @@ export default function AdminDashboard() {
   const conflictsQuery = useAsync(() => api.listAppointments({ status: 'CONFLICTED' }), []);
   const allQuery = useAsync(() => api.listAppointments(), []);
 
-  const doctors = doctorsQuery.data ?? [];
+  // Admins are sent every doctor, including deactivated ones.
+  const doctors = (doctorsQuery.data ?? []).filter((d) => d.is_active);
   const conflicts = conflictsQuery.data ?? [];
   const all = allQuery.data ?? [];
 

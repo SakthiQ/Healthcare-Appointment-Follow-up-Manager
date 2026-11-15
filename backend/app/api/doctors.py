@@ -16,22 +16,33 @@ from schemas.doctor import (
 router = APIRouter(prefix="/doctors", tags=["Doctors & Schedules"])
 
 
+def _is_admin(user: Optional[User]) -> bool:
+    return user is not None and user.role == UserRole.ADMIN
+
+
 @router.get("", response_model=List[DoctorResponse], status_code=status.HTTP_200_OK)
 def search_doctors(
     specialization: Optional[str] = Query(default=None, description="Filter doctors by specialization"),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
-    """Search active doctors by specialization (public/patient portal)."""
-    return doctor_service.search_doctors(db, specialization=specialization, active_only=True)
+    """Search doctors by specialization. Public: active doctors only, without the
+    doctor's login email or account id. Admins get those fields, and every doctor,
+    so a deactivated one can still be found and reactivated."""
+    is_admin = _is_admin(current_user)
+    return doctor_service.search_doctors(
+        db, specialization=specialization, active_only=not is_admin, include_private=is_admin
+    )
 
 
 @router.get("/{doctor_id}", response_model=DoctorResponse, status_code=status.HTTP_200_OK)
 def get_doctor_profile(
     doctor_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
-    """Retrieve detailed doctor profile."""
-    return doctor_service.get_doctor(db, doctor_id)
+    """Retrieve a doctor profile. The login email and account id are only included for admins."""
+    return doctor_service.get_doctor(db, doctor_id, include_private=_is_admin(current_user))
 
 
 @router.get("/{doctor_id}/schedule", response_model=List[WorkingHoursResponse], status_code=status.HTTP_200_OK)

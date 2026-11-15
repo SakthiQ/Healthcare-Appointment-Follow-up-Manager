@@ -45,7 +45,13 @@ class HoldRepository:
             Appointment.doctor_profile_id == doctor_id,
             Appointment.start_time >= day_start,
             Appointment.start_time < day_end,
-            Appointment.status.in_([AppointmentStatus.HELD, AppointmentStatus.CONFIRMED])
+            # Same set the booking overlap check and the database constraint treat as
+            # occupying a slot. A rescheduled appointment occupies its new slot too.
+            Appointment.status.in_([
+                AppointmentStatus.HELD,
+                AppointmentStatus.CONFIRMED,
+                AppointmentStatus.RESCHEDULED,
+            ])
         ).all()
 
     def create(

@@ -270,3 +270,25 @@ def test_db_sourced_timestamps_serialise_with_utc_designator(client):
         parsed = datetime.fromisoformat(data[field].replace("Z", "+00:00"))
         assert parsed.utcoffset() == timedelta(0), f"{field}={data[field]!r} lacks a UTC offset"
     assert datetime.fromisoformat(data["start_time"].replace("Z", "+00:00")) == start_dt
+
+
+def test_admin_can_filter_appointments_by_doctor_profile_id(client):
+    """Everywhere else in the API "doctor_id" is the doctor's profile id, so the admin
+    filter must accept it. The doctor's user id (what appointment responses call
+    doctor_id) keeps working too."""
+    doc, admin_headers, headers1, _ = setup_appointment_test_env(client)
+    monday = get_next_monday() + timedelta(days=42)
+    start_dt = datetime.combine(monday, time(9, 0), tzinfo=timezone.utc)
+    appt = client.post("/api/v1/appointments", json={
+        "doctor_id": doc["id"], "start_time": start_dt.isoformat(),
+        "end_time": (start_dt + timedelta(minutes=30)).isoformat()
+    }, headers=headers1).json()
+
+    by_profile = client.get(f"/api/v1/appointments?doctor_id={doc['id']}", headers=admin_headers).json()
+    by_user = client.get(f"/api/v1/appointments?doctor_id={appt['doctor_id']}", headers=admin_headers).json()
+    assert [a["id"] for a in by_profile] == [appt["id"]]
+    assert [a["id"] for a in by_user] == [appt["id"]]
+    assert appt["doctor_id"] != doc["id"]  # the two ids really are different
+
+    nobody = client.get("/api/v1/appointments?doctor_id=no-such-doctor", headers=admin_headers).json()
+    assert nobody == []

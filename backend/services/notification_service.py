@@ -175,12 +175,16 @@ class NotificationService:
             return "Appointment Cancelled", f"Your appointment on {when} has been cancelled."
 
         if job.notification_type == NotificationType.DOCTOR_LEAVE_CONFLICT:
-            leave_date = payload.get("leave_date", "the requested date")
             original_start = payload.get("original_start_time", "the scheduled time")
+            if payload.get("reason") == "doctor_deactivated":
+                # No leave date: the doctor was deactivated and is not coming back to this slot.
+                why = "the doctor is no longer available"
+            else:
+                why = f"the doctor is unavailable on {payload.get('leave_date', 'the requested date')}"
             return (
                 "Appointment Cancelled Due to Doctor Unavailability",
                 f"Your appointment originally scheduled for {original_start} could not be kept because "
-                f"the doctor is unavailable on {leave_date}. Please book a new appointment."
+                f"{why}. Please book a new appointment."
             )
 
         if job.notification_type == NotificationType.MEDICATION_REMINDER:

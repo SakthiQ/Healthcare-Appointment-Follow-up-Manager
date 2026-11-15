@@ -104,7 +104,8 @@ class SlotService:
     def validate_slot_boundary(
         self, db: Session, doctor_id: str, start_time: datetime, end_time: datetime
     ) -> bool:
-        """Verify slot falls strictly within active working hours, matches duration, and is not a leave date."""
+        """Verify the interval is exactly one of the doctor's generated slots: inside active
+        working hours, the right duration, on the slot grid, and not on a leave date."""
         doctor = doctor_repository.get_by_id(db, doctor_id)
         if not doctor or not doctor.is_active:
             return False
@@ -128,10 +129,16 @@ class SlotService:
         all_hours = doctor_repository.get_working_hours(db, doctor_id)
         day_hours = [h for h in all_hours if h.day_of_week == day_of_week and h.is_active]
 
+        slot_length = timedelta(minutes=doctor.slot_duration_minutes)
         for wh in day_hours:
             wh_start = local_to_utc(target_date, wh.start_time, zone)
             wh_end = local_to_utc(target_date, wh.end_time, zone)
-            if start_time >= wh_start and end_time <= wh_end:
+            if start_time < wh_start or end_time > wh_end:
+                continue
+            # Must be one of the slots generate_slots offers: a whole number of slot
+            # lengths after the start of the working hours. Otherwise 09:07-09:37 would
+            # be accepted and take both the 09:00 and the 09:30 slot out of the day.
+            if (start_time - wh_start) % slot_length == timedelta(0):
                 return True
 
         return False

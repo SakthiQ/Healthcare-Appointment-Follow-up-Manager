@@ -33,8 +33,9 @@ export interface TokenResponse {
 
 export interface Doctor {
   id: string;
-  user_id: string;
-  email: string;
+  /** Account id and login email: only sent to admins, null for everyone else. */
+  user_id: string | null;
+  email: string | null;
   full_name: string;
   specialization: string;
   slot_duration_minutes: number;

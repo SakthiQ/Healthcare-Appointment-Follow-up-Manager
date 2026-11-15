@@ -2,6 +2,7 @@ from datetime import date, time, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from app.core.datetime_utils import is_valid_timezone
+from schemas.auth import _password_fits_bcrypt
 
 
 def _check_timezone(value: Optional[str]) -> Optional[str]:
@@ -19,6 +20,9 @@ class DoctorCreateRequest(BaseModel):
     timezone: str = Field(default="UTC", max_length=64, description="IANA timezone the working hours are written in")
 
     _validate_timezone = field_validator("timezone")(_check_timezone)
+    # Same limit as every other password field: bcrypt raises on more than 72 bytes,
+    # which would otherwise surface as a 500.
+    _password_fits_bcrypt = field_validator("password")(_password_fits_bcrypt)
 
 
 class DoctorUpdateRequest(BaseModel):
@@ -34,8 +38,10 @@ class DoctorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    user_id: str
-    email: str
+    # The doctor's account id and login email are for admins only. The public doctor
+    # endpoints leave them out (None) for everyone else.
+    user_id: Optional[str] = None
+    email: Optional[str] = None
     full_name: str
     specialization: str
     slot_duration_minutes: int
