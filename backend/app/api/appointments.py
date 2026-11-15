@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, Response, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
@@ -29,16 +29,22 @@ def create_appointment(
 
 @router.get("", response_model=List[AppointmentResponse], status_code=status.HTTP_200_OK)
 def list_appointments(
+    response: Response,
     doctor_id: Optional[str] = Query(default=None, description="Filter by doctor profile ID, or the doctor's user ID (Admin only)"),
     patient_id: Optional[str] = Query(default=None, description="Filter by patient ID (Admin only)"),
     status_filter: Optional[AppointmentStatus] = Query(default=None, alias="status", description="Filter by appointment status"),
+    limit: Optional[int] = Query(default=None, ge=1, le=1000, description="Page size. Omit for every match"),
+    offset: int = Query(default=0, ge=0, description="Matches to skip, for paging"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List appointments for authorized user."""
-    result = appointment_service.list_appointments(
-        db, user=current_user, doctor_id=doctor_id, patient_id=patient_id, status_filter=status_filter
+    """List appointments for authorized user, earliest first. With `limit`/`offset` it
+    returns one page; the X-Total-Count header always carries the total that match."""
+    result, total = appointment_service.list_appointments(
+        db, user=current_user, doctor_id=doctor_id, patient_id=patient_id, status_filter=status_filter,
+        limit=limit, offset=offset,
     )
+    response.headers["X-Total-Count"] = str(total)
     if current_user.role == UserRole.ADMIN:  # an admin listing everyone's appointments is worth a trail
         audit_service.record(
             db, "appointment.list", actor=current_user, resource_type="appointment",

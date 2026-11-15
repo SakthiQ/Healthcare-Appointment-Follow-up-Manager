@@ -7,16 +7,17 @@ import { Card, ErrorBanner, Spinner } from '../../components/ui';
 export default function AdminDashboard() {
   const { user } = useAuth();
   const doctorsQuery = useAsync(() => api.searchDoctors(), []);
-  const conflictsQuery = useAsync(() => api.listAppointments({ status: 'CONFLICTED' }), []);
-  const allQuery = useAsync(() => api.listAppointments(), []);
+  // Counts come from the database; downloading every appointment just to count them
+  // does not scale.
+  const statsQuery = useAsync(() => api.getAdminStats(), []);
 
   // Admins are sent every doctor, including deactivated ones.
   const doctors = (doctorsQuery.data ?? []).filter((d) => d.is_active);
-  const conflicts = conflictsQuery.data ?? [];
-  const all = allQuery.data ?? [];
+  const stats = statsQuery.data;
+  const conflictedCount = stats?.appointments_by_status.CONFLICTED ?? 0;
 
-  const loading = doctorsQuery.loading || conflictsQuery.loading || allQuery.loading;
-  const error = doctorsQuery.error ?? conflictsQuery.error ?? allQuery.error;
+  const loading = doctorsQuery.loading || statsQuery.loading;
+  const error = doctorsQuery.error ?? statsQuery.error;
 
   return (
     <div className="page">
@@ -35,8 +36,7 @@ export default function AdminDashboard() {
         error={error}
         onRetry={() => {
           doctorsQuery.reload();
-          conflictsQuery.reload();
-          allQuery.reload();
+          statsQuery.reload();
         }}
       />
 
@@ -44,23 +44,23 @@ export default function AdminDashboard() {
         <>
           <div className="stat-row">
             <div className="stat">
-              <span className="stat-value">{doctors.length}</span>
+              <span className="stat-value">{stats?.active_doctors ?? doctors.length}</span>
               <span className="stat-label">Active doctors</span>
             </div>
             <div className="stat">
-              <span className="stat-value">{all.length}</span>
+              <span className="stat-value">{stats?.appointments_total ?? 0}</span>
               <span className="stat-label">Appointments</span>
             </div>
-            <div className={conflicts.length > 0 ? 'stat stat-danger' : 'stat'}>
-              <span className="stat-value">{conflicts.length}</span>
+            <div className={conflictedCount > 0 ? 'stat stat-danger' : 'stat'}>
+              <span className="stat-value">{conflictedCount}</span>
               <span className="stat-label">Conflicted</span>
             </div>
           </div>
 
-          {conflicts.length > 0 ? (
+          {conflictedCount > 0 ? (
             <div className="banner banner-danger" role="alert">
               <div>
-                <strong>{conflicts.length} appointment(s) need attention</strong>
+                <strong>{conflictedCount} appointment(s) need attention</strong>
                 <div>These clash with doctor leave. Affected patients have been notified.</div>
               </div>
               <Link className="btn btn-sm" to="/admin/conflicts">

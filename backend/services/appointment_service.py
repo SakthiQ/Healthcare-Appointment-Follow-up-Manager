@@ -1,4 +1,5 @@
-from typing import List, Optional
+from contextlib import contextmanager
+from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 import logging
 import threading
@@ -26,9 +27,21 @@ from schemas.appointment import (
 
 logger = logging.getLogger(__name__)
 
-# Application-level lock for SQLite environments (tests).
-# PostgreSQL uses SELECT FOR UPDATE for row-level locking; SQLite cannot.
+# Application-level lock for SQLite only (tests, local development), which has no row
+# locks. On PostgreSQL bookings are serialised per doctor by the doctor-row lock
+# (SELECT ... FOR UPDATE) and the exclusion constraint has the final say, so a
+# process-wide lock there would only make every booking for every doctor queue behind
+# one another.
 _booking_lock = threading.Lock()
+
+
+@contextmanager
+def _sqlite_booking_lock(db: Session):
+    if db.bind is not None and db.bind.dialect.name == "sqlite":
+        with _booking_lock:
+            yield
+    else:
+        yield
 
 
 def _abandon_failed_side_effect(db: Session, appt: Appointment, description: str) -> None:
@@ -67,12 +80,12 @@ class AppointmentService:
             if not slot_service.validate_slot_boundary(db, doctor_profile_id, start_time, end_time):
                 raise ConflictError("This slot is no longer available. Please select another slot.")
 
-            # Acquire the same app-level lock as the direct-booking path so
-            # the hold-confirmation critical section (overlap check -> hold
-            # deactivation -> appointment insert) is also serialized. The
-            # uq_doctor_profile_start_time_active DB constraint remains the
-            # final authority; this lock only reduces conflict churn.
-            with _booking_lock:
+            # On SQLite, the same app-level lock as the direct-booking path
+            # serialises the critical section (overlap check -> hold deactivation
+            # -> appointment insert). On PostgreSQL the doctor-row lock taken
+            # above already does, per doctor. The database constraints remain the
+            # final authority either way.
+            with _sqlite_booking_lock(db):
                 # Transactional overlap check under for_update
                 overlapping = appointment_repository.get_active_overlapping(
                     db, doctor_profile_id, start_time, end_time, with_for_update=True
@@ -129,10 +142,10 @@ class AppointmentService:
         if existing_hold:
             raise ConflictError("Slot is currently held by another patient.")
 
-        # Acquire app-level lock to serialize the check-then-insert critical section.
-        # For PostgreSQL this is supplemented by SELECT FOR UPDATE; for SQLite (tests)
-        # this is the sole concurrency guard.
-        with _booking_lock:
+        # Serialise the check-then-insert critical section: on PostgreSQL by the
+        # doctor-row lock taken above (per doctor), on SQLite by the app-level lock,
+        # which is its only concurrency guard.
+        with _sqlite_booking_lock(db):
             # Re-check overlapping inside the lock to prevent TOCTOU race
             overlapping = appointment_repository.get_active_overlapping(
                 db, doctor_profile_id, start_time, end_time, with_for_update=True
@@ -336,21 +349,24 @@ class AppointmentService:
         user: User,
         doctor_id: Optional[str] = None,
         patient_id: Optional[str] = None,
-        status_filter: Optional[AppointmentStatus] = None
-    ) -> List[AppointmentResponse]:
+        status_filter: Optional[AppointmentStatus] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> Tuple[List[AppointmentResponse], int]:
+        """A page of the appointments `user` may see, and the total that match."""
+        filters = {"status_filter": status_filter, "limit": limit, "offset": offset}
         if user.role == UserRole.PATIENT:
-            appts = appointment_repository.list_for_patient(db, user.id, status_filter=status_filter)
+            filters["patient_id"] = user.id
         elif user.role == UserRole.DOCTOR:
-            appts = appointment_repository.list_for_doctor(db, user.id, status_filter=status_filter)
-        else: # ADMIN
+            filters["doctor_user_id"] = user.id
+        else:  # ADMIN
             if patient_id:
-                appts = appointment_repository.list_for_patient(db, patient_id, status_filter=status_filter)
+                filters["patient_id"] = patient_id
             elif doctor_id:
-                appts = appointment_repository.list_for_doctor_any_id(db, doctor_id, status_filter=status_filter)
-            else:
-                appts = appointment_repository.list_all(db, status_filter=status_filter)
+                filters["doctor_any_id"] = doctor_id
 
-        return [AppointmentResponse.model_validate(a) for a in appts]
+        appts, total = appointment_repository.list_page(db, **filters)
+        return [AppointmentResponse.model_validate(a) for a in appts], total
 
 
 appointment_service = AppointmentService()

@@ -21,6 +21,10 @@ settings.ALLOW_PRIVILEGED_SELF_REGISTRATION = True
 # its own tests, which switch it back on with monkeypatch.
 settings.RATE_LIMITING_ENABLED = False
 
+# Test-only: the concurrency tests fire 100 requests at once on purpose. The request cap has
+# its own tests, which switch it back on with monkeypatch.
+settings.MAX_CONCURRENT_REQUESTS = 0
+
 from sqlalchemy.pool import StaticPool
 
 # Use in-memory SQLite for testing

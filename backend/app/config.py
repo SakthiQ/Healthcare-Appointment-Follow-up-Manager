@@ -33,7 +33,34 @@ class Settings(BaseSettings):
     CALENDAR_DEMO_MODE: Optional[bool] = None
     
     DATABASE_URL: str = "sqlite:///./healthcare_dev.db"
-    
+
+    # Database connection pool, per web process. Every request holds one connection until
+    # its response has been sent, and an audited request briefly holds a second one (the
+    # audit row is written on its own connection). The pool must therefore cover
+    # 2 x MAX_CONCURRENT_REQUESTS, plus one per in-process worker and one for /health, or
+    # requests queue for a connection. The total across all processes must also stay under
+    # the database's own connection limit (on Neon, use the pooled connection string).
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    # How long a request waits for a free connection before failing. Short, so overload
+    # shows up as quick errors rather than requests hanging for half a minute.
+    DB_POOL_TIMEOUT_SECONDS: float = 10.0
+
+    # Requests one web process works on at once. Without a cap, a burst of traffic puts
+    # more requests in flight than there are database connections, and the server stalls
+    # for minutes: requests that hold a connection wait for a worker thread that is itself
+    # waiting for a connection. /health is never capped. 0 turns the cap off.
+    MAX_CONCURRENT_REQUESTS: int = 12
+    # How long a request beyond the cap waits for a place (holding no thread or
+    # connection) before it is answered 503 with Retry-After. Absorbs short bursts.
+    REQUEST_QUEUE_TIMEOUT_SECONDS: float = 2.0
+
+    # Background workers: jobs claimed per batch. A worker that finds a full batch goes
+    # straight on to the next one instead of waiting for the next poll, so a backlog
+    # drains at the speed of the provider rather than one batch per poll interval.
+    NOTIFICATION_BATCH_SIZE: int = 100
+    CALENDAR_BATCH_SIZE: int = 50
+
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -194,6 +221,18 @@ class Settings(BaseSettings):
     @property
     def calendar_demo_mode(self) -> bool:
         return self.DEMO_MODE if self.CALENDAR_DEMO_MODE is None else self.CALENDAR_DEMO_MODE
+
+    # Connections the in-process workers (notification, calendar, hold expiry, maintenance)
+    # and the health check can hold on top of the request traffic.
+    _NON_REQUEST_CONNECTIONS = 5
+
+    def pool_shortfall(self) -> int:
+        """How many connections the pool is short of for MAX_CONCURRENT_REQUESTS at full
+        load (see DB_POOL_SIZE). 0 when it is large enough or the cap is off."""
+        if self.MAX_CONCURRENT_REQUESTS <= 0:
+            return 0
+        needed = 2 * self.MAX_CONCURRENT_REQUESTS + self._NON_REQUEST_CONNECTIONS
+        return max(0, needed - (self.DB_POOL_SIZE + self.DB_MAX_OVERFLOW))
 
     @property
     def cors_allowed_origins_list(self) -> list:
