@@ -13,7 +13,7 @@ def _check_timezone(value: Optional[str]) -> Optional[str]:
 
 class DoctorCreateRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=2)
     specialization: str = Field(..., min_length=2)
     slot_duration_minutes: int = Field(default=30, ge=5, le=240)

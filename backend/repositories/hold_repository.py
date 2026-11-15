@@ -26,6 +26,15 @@ class HoldRepository:
             AppointmentHold.expires_at > now
         ).first()
 
+    def count_active_for_patient(self, db: Session, patient_id: str) -> int:
+        """Unexpired, unreleased holds belonging to one patient."""
+        now = datetime.now(timezone.utc)
+        return db.query(AppointmentHold).filter(
+            AppointmentHold.patient_id == patient_id,
+            AppointmentHold.is_active.is_(True),
+            AppointmentHold.expires_at > now
+        ).count()
+
     def get_active_holds_for_doctor_date(
         self, db: Session, doctor_id: str, day_start: datetime, day_end: datetime
     ) -> List[AppointmentHold]:

@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import type { InvitationLookup } from '../api/types';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
 import { ErrorBanner, Field, Spinner } from '../components/ui';
+import { MIN_PASSWORD_LENGTH } from '../lib/password';
 
 const ROLE_LABEL = { DOCTOR: 'a doctor', ADMIN: 'an administrator' } as const;
 
@@ -57,7 +58,8 @@ export default function Register() {
     const errs: Record<string, string> = {};
     if (fullName.trim().length < 2) errs.fullName = 'Enter your full name (at least 2 characters).';
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = 'Enter a valid email address.';
-    if (password.length < 6) errs.password = 'Password must be at least 6 characters.';
+    if (password.length < MIN_PASSWORD_LENGTH)
+      errs.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     if (confirm !== password) errs.confirm = 'Passwords do not match.';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -160,7 +162,7 @@ export default function Register() {
             label="Password"
             htmlFor="password"
             error={fieldErrors.password}
-            hint="At least 6 characters."
+            hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
           >
             <input
               id="password"

@@ -108,7 +108,8 @@ class AppointmentService:
                     doctor_profile_id=doctor.id,
                     start_time=start_time,
                     end_time=end_time,
-                    status=AppointmentStatus.CONFIRMED
+                    status=AppointmentStatus.CONFIRMED,
+                    notes=req.notes,
                 )
             response = AppointmentResponse.model_validate(appt)
             self._safe_queue_booking_notifications(db, appt)
@@ -160,7 +161,8 @@ class AppointmentService:
                 doctor_profile_id=doctor.id,
                 start_time=start_time,
                 end_time=end_time,
-                status=AppointmentStatus.CONFIRMED
+                status=AppointmentStatus.CONFIRMED,
+                notes=req.notes,
             )
         response = AppointmentResponse.model_validate(appt)
         self._safe_queue_booking_notifications(db, appt)
@@ -325,7 +327,9 @@ class AppointmentService:
         if appt.status == AppointmentStatus.COMPLETED:
             raise ValidationError("Cannot cancel a completed appointment.")
 
-        cancelled_appt = appointment_repository.update_status(db, appt, AppointmentStatus.CANCELLED)
+        cancelled_appt = appointment_repository.cancel(
+            db, appt, reason=req.cancellation_reason if req else None
+        )
         response = AppointmentResponse.model_validate(cancelled_appt)
         self._safe_queue_cancellation_notifications(db, cancelled_appt)
         self._safe_sync_calendar(db, cancelled_appt, "cancelled")

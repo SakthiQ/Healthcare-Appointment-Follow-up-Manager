@@ -189,8 +189,36 @@ driver, which is not installed, so without this a fresh install crashes at start
 | `AUTH_COOKIE_MODE` (+ `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`) | off | Keep the session in an httpOnly cookie instead of `localStorage`. Needs the app and API on the same site, and the frontend built with `VITE_AUTH_COOKIES=true`. Leave off for a cross-site Vercel + Render setup |
 | `CONSULTATION_EARLY_SUBMIT_MINUTES` | unset | Reject consultations recorded earlier than this before the appointment. Unset keeps the demo flow working |
 
-Behind a proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips='*'` (already in `render.yaml`)
-so the login throttle sees real client IPs. Only do this when the app is reachable solely through that proxy.
+### Client IP behind proxies
+
+The login throttle, the per-IP rate limits and the audit log all key on the client's IP.
+Behind a proxy the app has to read it from a header, and only part of what arrives can be
+trusted: each proxy *appends* to `X-Forwarded-For`, so its leftmost entries are whatever the
+client chose to send. Do **not** start uvicorn with `--proxy-headers --forwarded-allow-ips='*'`:
+that takes the leftmost entry and lets anyone dodge the lockout with a fake IP per request.
+Instead set:
+
+| Variable | Meaning |
+|---|---|
+| `CLIENT_IP_HEADER` | A header your edge proxy sets and overwrites with the client IP, e.g. Cloudflare's `CF-Connecting-IP`. Used first when present. |
+| `TRUSTED_PROXY_HOPS` | How many proxies you control append to `X-Forwarded-For`. The client IP is the entry that many places from the right. |
+
+Both empty (local development) means the TCP peer address. Invalid values are ignored.
+
+On **Render**, requests pass through Cloudflare and then Render's proxy, so `render.yaml` sets
+`CLIENT_IP_HEADER=CF-Connecting-IP` with `TRUSTED_PROXY_HOPS=2` as the fallback. This follows
+Render community reports rather than official documentation, so check it once after deploying:
+sign in, open **Audit log** in the admin portal, and confirm the `auth.login` entry shows your
+own public IP (search "what is my IP" to compare). If it shows a Cloudflare or private address,
+adjust these two settings.
+
+### Accounts
+
+- New passwords need at least 8 characters (the frontend checks the same rule). Existing
+  shorter passwords keep working until the user changes them.
+- A patient can hold at most `MAX_ACTIVE_HOLDS_PER_PATIENT` slots at once (default 2), so one
+  account cannot hold every free slot. The booking page holds one at a time and releases it
+  when the patient goes back.
 `frontend/vercel.json` sets a Content-Security-Policy and other security headers; if you add a third-party
 script or an API on another scheme, update its `script-src` / `connect-src`.
 

@@ -8,6 +8,8 @@ handlers copies the context, so it is visible there too.
 from contextvars import ContextVar
 from typing import Optional
 
+from app.core.client_ip import resolve_client_ip
+
 client_ip_var: ContextVar[Optional[str]] = ContextVar("client_ip", default=None)
 
 
@@ -26,8 +28,7 @@ class RequestContextMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        client = scope.get("client")
-        token = client_ip_var.set(client[0] if client else None)
+        token = client_ip_var.set(resolve_client_ip(scope))
         try:
             await self.app(scope, receive, send)
         finally:

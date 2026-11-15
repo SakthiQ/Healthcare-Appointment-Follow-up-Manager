@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { COMMON_TIMEZONES, isValidTimeZone } from '../../lib/format';
 import { useAsync } from '../../lib/useAsync';
 import { Badge, Card, EmptyState, ErrorBanner, Field, Spinner, SuccessBanner } from '../../components/ui';
+import { MIN_PASSWORD_LENGTH } from '../../lib/password';
 
 export default function DoctorManagement() {
   const { data, loading, error, reload } = useAsync(() => api.searchDoctors(), []);
@@ -35,7 +36,8 @@ export default function DoctorManagement() {
     const errs: Record<string, string> = {};
     if (fullName.trim().length < 2) errs.fullName = 'Full name is required.';
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = 'Enter a valid email address.';
-    if (password.length < 6) errs.password = 'Password must be at least 6 characters.';
+    if (password.length < MIN_PASSWORD_LENGTH)
+      errs.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
     if (specialization.trim().length < 2) errs.specialization = 'Specialisation is required.';
     if (slotDuration < 5 || slotDuration > 240)
       errs.slotDuration = 'Slot duration must be between 5 and 240 minutes.';
@@ -134,7 +136,7 @@ export default function DoctorManagement() {
                 label="Temporary password"
                 htmlFor="password"
                 error={fieldErrors.password}
-                hint="At least 6 characters."
+                hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
               >
                 <input
                   id="password"

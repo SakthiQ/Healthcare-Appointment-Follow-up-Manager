@@ -54,7 +54,7 @@ describe('Account: changing the password', () => {
   it.each([
     ['mismatched confirmation', 'old-password', 'new-password-1', 'new-password-2', 'The two passwords do not match.'],
     ['same as the current one', 'old-password', 'old-password', 'old-password', /different from your current one/i],
-    ['too short', 'old-password', 'abc', 'abc', /at least 6 characters/i],
+    ['too short', 'old-password', 'abc', 'abc', /at least 8 characters/i],
   ])('refuses a %s without calling the API', async (_label, current, next, confirm, message) => {
     const auth = makeAuth();
     vi.mocked(useAuth).mockReturnValue(auth);
