@@ -4,7 +4,7 @@
 # A pin for a package that is not needed on your platform (e.g. colorama on Linux) is ignored.
 
 alembic==1.20.1
-annotated-doc==0.0.5
+annotated-doc==0.0.6
 annotated-types==0.8.0
 anyio==4.16.0
 bcrypt==5.0.0
