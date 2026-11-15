@@ -1,4 +1,5 @@
 import type {
+  AdminStats,
   Appointment,
   AISummary,
   AuditLogPage,
@@ -321,6 +322,8 @@ export const api = {
   }) => post<InvitationCreated>('/admin/invitations', data),
 
   listInvitations: () => get<Invitation[]>('/admin/invitations'),
+
+  getAdminStats: () => get<AdminStats>('/admin/stats'),
 
   revokeInvitation: (invitationId: string) => del<void>(`/admin/invitations/${invitationId}`),
 

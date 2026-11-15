@@ -11,13 +11,14 @@ module can also be run standalone as a separate OS process:
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from models.notification import NotificationStatus
 from repositories.notification_repository import notification_repository
 from services.notification_service import notification_service
+from workers.runner import batch_was_full
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,8 @@ DEFAULT_POLL_INTERVAL_SECONDS = 30.0
 
 
 class NotificationWorker:
-    def __init__(self, batch_size: int = 20):
-        self.batch_size = batch_size
+    def __init__(self, batch_size: Optional[int] = None):
+        self.batch_size = batch_size or settings.NOTIFICATION_BATCH_SIZE
 
     def run_once(self, db: Session) -> Dict[str, int]:
         """Claim one batch of due jobs and attempt to process each. Returns
@@ -76,6 +77,7 @@ def run_forever(poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS) ->
     logger.info("NotificationWorker starting (poll_interval=%ss)", poll_interval_seconds)
     while True:
         db = SessionLocal()
+        stats = None
         try:
             stats = notification_worker.run_once(db)
             if stats["claimed"]:
@@ -84,7 +86,9 @@ def run_forever(poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS) ->
             logger.exception("NotificationWorker: unexpected error processing batch")
         finally:
             db.close()
-        time.sleep(poll_interval_seconds)
+        # A full batch means more is probably waiting: go again at once.
+        if not batch_was_full(notification_worker, stats):
+            time.sleep(poll_interval_seconds)
 
 
 if __name__ == "__main__":

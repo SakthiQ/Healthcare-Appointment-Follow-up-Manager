@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import rate_limited_per_user, require_role
+from models.appointment import AppointmentStatus
 from models.user import User, UserRole
+from repositories.appointment_repository import appointment_repository
+from repositories.doctor_repository import doctor_repository
+from schemas.admin import AdminStatsResponse
 from services.audit_service import audit_service
 from services.doctor_service import doctor_service
 from services.invitation_service import invitation_service
@@ -24,6 +28,22 @@ from schemas.doctor import (
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin Portal"])
+
+
+@router.get("/stats", response_model=AdminStatsResponse, status_code=status.HTTP_200_OK)
+def get_admin_stats(
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Dashboard counts: bookable doctors and appointments by status. Two COUNT queries,
+    however many appointments there are."""
+    by_status = appointment_repository.count_by_status(db)
+    counts = {s.value: by_status.get(s, 0) for s in AppointmentStatus}
+    return AdminStatsResponse(
+        active_doctors=doctor_repository.count_active(db),
+        appointments_total=sum(counts.values()),
+        appointments_by_status=counts,
+    )
 
 
 @router.post(

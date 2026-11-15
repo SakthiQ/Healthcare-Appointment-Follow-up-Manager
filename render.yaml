@@ -53,3 +53,13 @@ services:
         value: "True"
       - key: ALLOW_PRIVILEGED_SELF_REGISTRATION
         value: "False"
+      # Capacity per process (docs/deployment.md "Capacity and scaling"). Requests beyond
+      # MAX_CONCURRENT_REQUESTS wait briefly for a place, then get 503 instead of stalling.
+      # The free plan (0.1 CPU) serves a demo, not real traffic: for that, move to a paid
+      # plan, add instances, and use Neon's POOLED connection string for DATABASE_URL.
+      - key: MAX_CONCURRENT_REQUESTS
+        value: "12"
+      - key: DB_POOL_SIZE
+        value: "10"
+      - key: DB_MAX_OVERFLOW
+        value: "20"

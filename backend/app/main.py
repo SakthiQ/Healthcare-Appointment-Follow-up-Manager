@@ -1,7 +1,9 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.core.concurrency_limit import ConcurrencyLimitMiddleware
 from app.core.request_context import RequestContextMiddleware
 from app.logging_config import setup_logging
 from app.exceptions import AppException, app_exception_handler, global_exception_handler
@@ -9,6 +11,7 @@ from app.api import api_router
 from app.api.health import router as health_router
 
 setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -35,6 +38,18 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
+    shortfall = settings.pool_shortfall()
+    if shortfall:
+        logger.warning(
+            "The database pool (DB_POOL_SIZE=%s + DB_MAX_OVERFLOW=%s) is %s connection(s) short "
+            "for MAX_CONCURRENT_REQUESTS=%s. Under full load requests will wait for connections.",
+            settings.DB_POOL_SIZE, settings.DB_MAX_OVERFLOW, shortfall, settings.MAX_CONCURRENT_REQUESTS,
+        )
+
+    # Request cap, added first so it sits INSIDE the CORS middleware: a 503 it returns
+    # still carries the CORS headers, so the browser can read the "busy" message.
+    app.add_middleware(ConcurrencyLimitMiddleware)
+
     # CORS configuration. Auth is Bearer-token-based (Authorization header) unless
     # AUTH_COOKIE_MODE is on, so credentials are only allowed then. Credentials combined
     # with a wildcard origin would be a real misconfiguration (any site could then make
@@ -47,6 +62,8 @@ def create_app() -> FastAPI:
         allow_credentials=settings.AUTH_COOKIE_MODE,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Readable by the frontend: the total behind a paged list, and when to retry a 503/429.
+        expose_headers=["X-Total-Count", "Retry-After"],
     )
 
     # Makes the client IP available to services (the audit log records it).

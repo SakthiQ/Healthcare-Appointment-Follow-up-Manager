@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import date
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from models.user import User, UserRole
 from models.doctor import Doctor, DoctorWorkingHours, DoctorLeave
 
@@ -20,12 +20,27 @@ class DoctorRepository:
         return db.query(Doctor).filter(Doctor.user_id == user_id).first()
 
     def search(self, db: Session, specialization: Optional[str] = None, active_only: bool = True) -> List[Doctor]:
-        query = db.query(Doctor).join(User, Doctor.user_id == User.id)
+        # contains_eager fills Doctor.user from the join this query already does, so
+        # building the responses (name, email) costs no extra query per doctor.
+        query = (
+            db.query(Doctor)
+            .join(User, Doctor.user_id == User.id)
+            .options(contains_eager(Doctor.user))
+        )
         if active_only:
             query = query.filter(Doctor.is_active.is_(True), User.is_active.is_(True))
         if specialization:
             query = query.filter(Doctor.specialization.ilike(f"%{specialization.strip()}%"))
-        return query.all()
+        return query.order_by(User.full_name, Doctor.id).all()
+
+    def count_active(self, db: Session) -> int:
+        """Doctors patients can book: active profile and active account."""
+        return (
+            db.query(Doctor)
+            .join(User, Doctor.user_id == User.id)
+            .filter(Doctor.is_active.is_(True), User.is_active.is_(True))
+            .count()
+        )
 
     def create_doctor(self, db: Session, user_id: str, specialization: str, slot_duration: int = 30, timezone: str = "UTC", commit: bool = True) -> Doctor:
         doctor = Doctor(

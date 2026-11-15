@@ -1,7 +1,7 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import datetime, timezone
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from models.appointment import Appointment, AppointmentStatus
 from app.core.datetime_utils import ensure_utc
@@ -159,42 +159,56 @@ class AppointmentRepository:
         db.refresh(appointment)
         return appointment
 
-    def list_for_patient(
-        self, db: Session, patient_id: str, status_filter: Optional[AppointmentStatus] = None
-    ) -> List[Appointment]:
-        query = db.query(Appointment).filter(Appointment.patient_id == patient_id)
-        if status_filter:
-            query = query.filter(Appointment.status == status_filter)
-        return query.order_by(Appointment.start_time.asc()).all()
+    def list_page(
+        self,
+        db: Session,
+        *,
+        patient_id: Optional[str] = None,
+        doctor_user_id: Optional[str] = None,
+        doctor_any_id: Optional[str] = None,
+        status_filter: Optional[AppointmentStatus] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> Tuple[List[Appointment], int]:
+        """Appointments matching the filters, earliest first, and how many match in total.
 
-    def list_for_doctor(
-        self, db: Session, doctor_user_id: str, status_filter: Optional[AppointmentStatus] = None
-    ) -> List[Appointment]:
-        query = db.query(Appointment).filter(Appointment.doctor_id == doctor_user_id)
-        if status_filter:
-            query = query.filter(Appointment.status == status_filter)
-        return query.order_by(Appointment.start_time.asc()).all()
+        `doctor_any_id` is for the admin filter. Everywhere else in the API "doctor_id" is
+        the doctor's PROFILE id (doctors.id), so that is what an admin will pass; the
+        doctor's user id is accepted too, because appointment responses call that
+        "doctor_id".
 
-    def list_for_doctor_any_id(
-        self, db: Session, doctor_id: str, status_filter: Optional[AppointmentStatus] = None
-    ) -> List[Appointment]:
-        """For the admin filter. Everywhere else in the API "doctor_id" is the doctor's
-        PROFILE id (doctors.id), so that is what an admin will pass; the doctor's user
-        id is accepted too, because appointment responses call that "doctor_id"."""
-        query = db.query(Appointment).filter(
-            or_(Appointment.doctor_profile_id == doctor_id, Appointment.doctor_id == doctor_id)
-        )
-        if status_filter:
-            query = query.filter(Appointment.status == status_filter)
-        return query.order_by(Appointment.start_time.asc()).all()
-
-    def list_all(
-        self, db: Session, status_filter: Optional[AppointmentStatus] = None
-    ) -> List[Appointment]:
+        The patient, doctor user and doctor profile every response shows are loaded up
+        front in three IN queries, not one query per row and relationship, so a page
+        costs four queries whatever its length."""
         query = db.query(Appointment)
+        if patient_id is not None:
+            query = query.filter(Appointment.patient_id == patient_id)
+        if doctor_user_id is not None:
+            query = query.filter(Appointment.doctor_id == doctor_user_id)
+        if doctor_any_id is not None:
+            query = query.filter(
+                or_(Appointment.doctor_profile_id == doctor_any_id, Appointment.doctor_id == doctor_any_id)
+            )
         if status_filter:
             query = query.filter(Appointment.status == status_filter)
-        return query.order_by(Appointment.start_time.asc()).all()
+
+        total = query.order_by(None).count() if (limit is not None or offset) else None
+        page = query.options(
+            selectinload(Appointment.patient),
+            selectinload(Appointment.doctor_user),
+            selectinload(Appointment.doctor),
+        ).order_by(Appointment.start_time.asc(), Appointment.id.asc())
+        if offset:
+            page = page.offset(offset)
+        if limit is not None:
+            page = page.limit(limit)
+        items = page.all()
+        return items, (total if total is not None else len(items))
+
+    def count_by_status(self, db: Session) -> dict:
+        """{status: count} over every appointment, for the admin dashboard."""
+        rows = db.query(Appointment.status, func.count(Appointment.id)).group_by(Appointment.status).all()
+        return {status: count for status, count in rows}
 
 
 appointment_repository = AppointmentRepository()

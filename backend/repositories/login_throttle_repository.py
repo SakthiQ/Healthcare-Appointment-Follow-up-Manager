@@ -47,8 +47,12 @@ class LoginThrottleRepository:
         return deleted
 
     def clear(self, db: Session, key: str) -> None:
-        if db.query(LoginThrottle).filter(LoginThrottle.key == key).delete():
-            db.commit()
+        db.query(LoginThrottle).filter(LoginThrottle.key == key).delete()
+        # Commit even when nothing was deleted, to end the transaction the DELETE opened.
+        # On SQLite that open transaction holds the database write lock, so the login's
+        # audit entry (written on its own connection) waited 5 seconds for it and was then
+        # lost: every successful login took over 5 seconds in local development.
+        db.commit()
 
 
 login_throttle_repository = LoginThrottleRepository()

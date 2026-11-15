@@ -58,6 +58,7 @@ class WorkerRunner:
         # between polls, and a failed batch can't poison the next one.
         while not self._stop.is_set():
             db = self._session_factory()
+            stats = None
             try:
                 stats = worker.run_once(db)
                 if stats and stats.get("claimed"):
@@ -66,7 +67,17 @@ class WorkerRunner:
                 logger.exception("%s: unexpected error processing batch", name)
             finally:
                 db.close()
-            self._stop.wait(self._poll_interval)
+            # A full batch means there is probably more waiting: take the next one now
+            # rather than one batch per poll interval, which let a backlog of reminders
+            # build up for hours after a busy day.
+            if not batch_was_full(worker, stats):
+                self._stop.wait(self._poll_interval)
+
+
+def batch_was_full(worker, stats) -> bool:
+    """True when `worker` (one with a batch_size) claimed a whole batch last run."""
+    batch_size = getattr(worker, "batch_size", None)
+    return bool(batch_size) and bool(stats) and stats.get("claimed", 0) >= batch_size
 
 
 def start_background_workers(

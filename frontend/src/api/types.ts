@@ -45,6 +45,13 @@ export interface Doctor {
   created_at: string;
 }
 
+/** GET /admin/stats: dashboard counts computed in the database. */
+export interface AdminStats {
+  active_doctors: number;
+  appointments_total: number;
+  appointments_by_status: Record<string, number>;
+}
+
 export interface WorkingHours {
   id: string;
   doctor_id: string;

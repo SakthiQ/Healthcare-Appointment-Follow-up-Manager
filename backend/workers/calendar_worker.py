@@ -8,12 +8,15 @@ run_once(), runnable standalone as its own OS process:
 """
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional
 from sqlalchemy.orm import Session
+
+from app.config import settings
 
 from models.calendar import CalendarSyncStatus, CalendarOperation
 from repositories.calendar_repository import calendar_repository
 from services.calendar_service import calendar_service
+from workers.runner import batch_was_full
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +24,8 @@ DEFAULT_POLL_INTERVAL_SECONDS = 30.0
 
 
 class CalendarWorker:
-    def __init__(self, batch_size: int = 20):
-        self.batch_size = batch_size
+    def __init__(self, batch_size: Optional[int] = None):
+        self.batch_size = batch_size or settings.CALENDAR_BATCH_SIZE
 
     def run_once(self, db: Session) -> Dict[str, int]:
         """Process one batch of pending calendar syncs. Never raises for an
@@ -61,6 +64,7 @@ def run_forever(poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS) ->
     logger.info("CalendarWorker starting (poll_interval=%ss)", poll_interval_seconds)
     while True:
         db = SessionLocal()
+        stats = None
         try:
             stats = calendar_worker.run_once(db)
             if stats["claimed"]:
@@ -69,7 +73,9 @@ def run_forever(poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS) ->
             logger.exception("CalendarWorker: unexpected error processing batch")
         finally:
             db.close()
-        time.sleep(poll_interval_seconds)
+        # A full batch means more is probably waiting: go again at once.
+        if not batch_was_full(calendar_worker, stats):
+            time.sleep(poll_interval_seconds)
 
 
 if __name__ == "__main__":

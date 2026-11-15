@@ -5,17 +5,24 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Determine if SQLite connect_args are needed
-connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-    echo=False
-)
+def _engine_kwargs(url: str) -> dict:
+    kwargs = {"pool_pre_ping": True, "echo": False}
+    if url.startswith("sqlite"):
+        kwargs["connect_args"] = {"check_same_thread": False}
+    # An in-memory SQLite database lives in a single connection, so its pool is not a
+    # QueuePool and takes no sizing. Every other URL gets the configured pool (see
+    # DB_POOL_SIZE in app/config.py for how to size it).
+    if not (url.startswith("sqlite") and (":memory:" in url or url.rstrip("/").endswith("sqlite:"))):
+        kwargs.update(
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
+        )
+    return kwargs
+
+
+engine = create_engine(settings.DATABASE_URL, **_engine_kwargs(settings.DATABASE_URL))
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

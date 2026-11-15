@@ -216,6 +216,58 @@ Once both halves are live:
 - Turn on `REQUIRE_EMAIL_VERIFICATION` only once real email works, otherwise nobody can sign in.
 - The audit log is readable by admins on the **Audit log** page or at `GET /api/v1/admin/audit-logs`. Entries are never deleted by the application, so decide on a retention period and purge outside it if your rules require one.
 
+## Capacity and scaling
+
+The blueprint's free Render plan (0.1 CPU, sleeps when idle) is for demos. Load tests of one
+process on a 22-core machine gave roughly these ceilings; a 0.1-CPU instance manages about a
+tenth of them:
+
+| Request | Per second, one process |
+|---|---|
+| Signed-in profile (`/auth/me`) | ~1,000 |
+| A patient's appointments | ~400 |
+| A doctor's free slots for a day | ~240 |
+| Login (bcrypt, deliberately slow) | ~30, using several cores |
+
+**What protects the server under a burst.** Route handlers are synchronous: each request
+runs on one of a fixed set of worker threads and keeps a database connection until its
+response is sent, and sending the response needs a worker thread as well. With more
+requests in flight than connections, the threads can all end up waiting for connections
+held by requests that are waiting for a thread, and the server stalls for minutes (a
+200-request burst did exactly this in testing, health check included). Two settings
+prevent it:
+
+- `MAX_CONCURRENT_REQUESTS` (default 12): requests one process works on at once. A request
+  beyond that waits, holding no thread or connection, up to `REQUEST_QUEUE_TIMEOUT_SECONDS`
+  (default 2) for a place, first come first served; only then does it get `503` with
+  `Retry-After: 1`, and the frontend shows "the server is busy". Short bursts are absorbed,
+  sustained overload gets quick answers instead of a stall. `/health` is never capped, so
+  the platform does not restart a server that is merely busy.
+- `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` (default 10 + 20): must be at least
+  `2 x MAX_CONCURRENT_REQUESTS + 5`, because an audited request briefly uses a second
+  connection and the in-process workers and health check need their own. The app logs a
+  warning at startup when the pool is too small. `DB_POOL_TIMEOUT_SECONDS` (default 10) is
+  how long a request waits for a connection before failing.
+
+**Scaling out.** Throughput grows with processes, not with the cap:
+
+1. Use a paid instance with dedicated CPU, and run several processes per instance by setting
+   `WEB_CONCURRENCY` (uvicorn reads it as its worker count), or add instances.
+2. Every process opens up to `DB_POOL_SIZE + DB_MAX_OVERFLOW` connections. Point
+   `DATABASE_URL` at Neon's **pooled** connection string (the host contains `-pooler`) so the
+   total cannot exceed the database's own connection limit.
+3. In-process workers are safe with several processes (rows are claimed with
+   `FOR UPDATE SKIP LOCKED`), but with many processes prefer `RUN_WORKERS_IN_PROCESS=False` and
+   run the workers as their own processes (section 7).
+4. A worker that finds a full batch (`NOTIFICATION_BATCH_SIZE`, `CALENDAR_BATCH_SIZE`) starts
+   the next one at once, so a backlog drains as fast as the email provider accepts mail. Each
+   email is still sent one at a time over SMTP; for very high volume, use a provider's HTTP API
+   or run more notification workers.
+
+**Logins are the expensive request.** Each one costs about 0.2 s of CPU for bcrypt, on
+purpose. 10,000 people signing in within the same minute needs roughly 35 cores for that alone;
+spreading sign-ins out (sessions last `ACCESS_TOKEN_EXPIRE_MINUTES`) is what keeps it affordable.
+
 ## Reproducible installs and CI
 
 - Install the backend with `pip install -r requirements.txt -c constraints.txt` (the Render build command does). `constraints.txt` pins every package to the version CI tests. To update the pins, run `python scripts/refresh_constraints.py` (use the same Python minor version as `PYTHON_VERSION` in `render.yaml`), run the tests, review the diff and commit. `python scripts/check_constraints.py` fails if anything installed is unpinned or has drifted. `uvloop` is Linux-only, so it is pinned in `constraints-extras.txt`; if CI reports an unpinned package, add it there.
