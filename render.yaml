@@ -14,10 +14,11 @@ services:
     buildCommand: pip install -r requirements.txt -c constraints.txt
     # Migrations run on every boot; they are idempotent, and a fresh database gets
     # every table, index and constraint on the first deploy.
-    # --proxy-headers/--forwarded-allow-ips make the client IP (used by the login
-    # throttle) the real one from X-Forwarded-For instead of Render's proxy.
-    # Only safe because the service is reachable solely through that proxy.
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    # No --proxy-headers / --forwarded-allow-ips: with those, uvicorn takes the LEFTMOST
+    # X-Forwarded-For entry, which the client writes, so anyone could dodge the login
+    # lockout and per-IP limits by sending a new fake IP each time. The app reads the
+    # client IP itself (CLIENT_IP_HEADER / TRUSTED_PROXY_HOPS below).
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -53,6 +54,16 @@ services:
         value: "True"
       - key: ALLOW_PRIVILEGED_SELF_REGISTRATION
         value: "False"
+      # Requests reach Render services through Cloudflare, then Render's proxy. Cloudflare
+      # puts the client IP in CF-Connecting-IP (overwriting any value the client sent);
+      # if that header is ever missing, the entry 2 from the right of X-Forwarded-For is
+      # the address Cloudflare saw. Check after deploying: sign in, then open the admin
+      # Audit log; the auth.login entry must show your own public IP. See
+      # docs/deployment.md "Client IP behind proxies".
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
+      - key: TRUSTED_PROXY_HOPS
+        value: "2"
       # Capacity per process (docs/deployment.md "Capacity and scaling"). Requests beyond
       # MAX_CONCURRENT_REQUESTS wait briefly for a place, then get 503 instead of stalling.
       # The free plan (0.1 CPU) serves a demo, not real traffic: for that, move to a paid

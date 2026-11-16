@@ -1,5 +1,5 @@
 /** Mirrors the API's rules so mistakes are caught before a request is made. */
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 8;
 // bcrypt, which the API uses, only reads the first 72 BYTES, so the API refuses longer ones.
 export const MAX_PASSWORD_BYTES = 72;
 

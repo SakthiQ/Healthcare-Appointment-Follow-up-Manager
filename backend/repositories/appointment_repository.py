@@ -55,7 +55,8 @@ class AppointmentRepository:
         doctor_profile_id: str,
         start_time: datetime,
         end_time: datetime,
-        status: AppointmentStatus = AppointmentStatus.CONFIRMED
+        status: AppointmentStatus = AppointmentStatus.CONFIRMED,
+        notes: Optional[str] = None,
     ) -> Appointment:
         start_time = ensure_utc(start_time)
         end_time = ensure_utc(end_time)
@@ -66,7 +67,8 @@ class AppointmentRepository:
             doctor_profile_id=doctor_profile_id,
             start_time=start_time,
             end_time=end_time,
-            status=status
+            status=status,
+            notes=notes,
         )
         db.add(appointment)
         try:
@@ -79,6 +81,11 @@ class AppointmentRepository:
             raise ConflictError("Slot is already booked.")
         db.refresh(appointment)
         return appointment
+
+    def cancel(self, db: Session, appointment: Appointment, reason: Optional[str] = None) -> Appointment:
+        """Mark CANCELLED and record why, in one commit."""
+        appointment.cancellation_reason = reason
+        return self.update_status(db, appointment, AppointmentStatus.CANCELLED)
 
     def update_status(self, db: Session, appointment: Appointment, new_status: AppointmentStatus) -> Appointment:
         appointment.status = new_status

@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.config import settings, Settings
 from app.database import get_db
+from app.core.client_ip import resolve_client_ip
 from app.core.security import decode_access_token
 from app.exceptions import UnauthorizedError, ForbiddenError
 from repositories.user_repository import user_repository
@@ -75,9 +76,9 @@ def get_optional_user(
 
 
 def client_ip(request: Request) -> str:
-    """The caller's IP. Behind a proxy this is the real one only if uvicorn runs with
-    --proxy-headers (the Render blueprint does)."""
-    return request.client.host if request.client else "unknown"
+    """The caller's IP, taken from proxy headers only as far as they can be trusted
+    (CLIENT_IP_HEADER / TRUSTED_PROXY_HOPS, see app/core/client_ip.py)."""
+    return resolve_client_ip(request.scope)
 
 
 def rate_limited(bucket: str, limit_setting: str, window_seconds: int = 3600):

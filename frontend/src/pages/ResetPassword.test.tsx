@@ -40,7 +40,7 @@ describe('ResetPassword', () => {
     const spy = vi.spyOn(api, 'resetPassword');
     renderPage();
     await fill('abc', 'abc');
-    expect(screen.getByText(/at least 6 characters/i)).toBeInTheDocument();
+    expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
   });
 
