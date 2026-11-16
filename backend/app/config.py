@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
     
     PROJECT_NAME: str = "Healthcare Appointment & Follow-up Manager"
-    VERSION: str = "0.1.0"
+    VERSION: str = "0.2.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
