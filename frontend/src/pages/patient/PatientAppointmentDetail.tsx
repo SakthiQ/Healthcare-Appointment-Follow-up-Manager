@@ -41,6 +41,7 @@ export default function PatientAppointmentDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const [symptoms, setSymptoms] = useState('');
   const [symptomError, setSymptomError] = useState<string | undefined>();
@@ -102,9 +103,10 @@ export default function PatientAppointmentDetail() {
     setActionError(null);
     setBusy(true);
     try {
-      await api.cancelAppointment(appointmentId);
+      await api.cancelAppointment(appointmentId, cancelReason.trim() || undefined);
       setNotice('Your appointment has been cancelled.');
       setConfirmCancel(false);
+      setCancelReason('');
       apptQuery.reload();
     } catch (err) {
       setActionError(err);
@@ -183,6 +185,18 @@ export default function PatientAppointmentDetail() {
           <span>Booked</span>
           <span>{formatDateTime(appt.created_at, appt.doctor_timezone)}</span>
         </div>
+        {appt.notes ? (
+          <div className="summary-row">
+            <span>Your notes</span>
+            <span className="prewrap">{appt.notes}</span>
+          </div>
+        ) : null}
+        {appt.status === 'CANCELLED' && appt.cancellation_reason ? (
+          <div className="summary-row">
+            <span>Cancellation reason</span>
+            <span className="prewrap">{appt.cancellation_reason}</span>
+          </div>
+        ) : null}
 
         <div className="row-actions">
           {RESCHEDULABLE.has(appt.status) ? (
@@ -336,12 +350,26 @@ export default function PatientAppointmentDetail() {
               This will release the slot on {formatDateTime(appt.start_time, appt.doctor_timezone)} and notify your doctor.
             </p>
             <p className="muted small">This cannot be undone — you'd need to book again.</p>
+            <Field label="Reason (optional)" htmlFor="cancel-reason" hint="Shared with your doctor.">
+              <textarea
+                id="cancel-reason"
+                rows={3}
+                maxLength={500}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                disabled={busy}
+                placeholder="e.g. Feeling better, or I can't make this time"
+              />
+            </Field>
           </>
         }
         confirmLabel="Yes, cancel it"
         busy={busy}
         onConfirm={handleCancel}
-        onCancel={() => setConfirmCancel(false)}
+        onCancel={() => {
+          setConfirmCancel(false);
+          setCancelReason('');
+        }}
       />
     </div>
   );

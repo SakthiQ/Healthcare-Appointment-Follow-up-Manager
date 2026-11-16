@@ -41,6 +41,7 @@ export default function BookAppointment() {
   const [secondsLeft, setSecondsLeft] = useState(0);
 
   const [symptoms, setSymptoms] = useState('');
+  const [notes, setNotes] = useState('');
   const [symptomError, setSymptomError] = useState<string | undefined>();
 
   const [confirming, setConfirming] = useState(false);
@@ -135,7 +136,11 @@ export default function BookAppointment() {
       // The backend keys the symptom report and the AI summary to an
       // appointment id, so the appointment is created first and the symptoms
       // captured above are submitted immediately afterwards.
-      const created = await api.createAppointment({ doctor_id: doctorId, hold_id: hold.id });
+      const created = await api.createAppointment({
+        doctor_id: doctorId,
+        hold_id: hold.id,
+        notes: notes.trim() || undefined,
+      });
       activeHoldId.current = null; // consumed by the booking — nothing to release
       setAppointment(created);
 
@@ -385,6 +390,21 @@ export default function BookAppointment() {
                 onChange={(e) => setSymptoms(e.target.value)}
                 disabled={confirming || holdExpired}
                 placeholder="e.g. Persistent headache for the last three days, worse in the morning…"
+              />
+            </Field>
+
+            <Field
+              label="Notes for your doctor (optional)"
+              htmlFor="booking-notes"
+              hint="Anything else they should know: access needs, an interpreter, medicines you take."
+            >
+              <textarea
+                id="booking-notes"
+                rows={3}
+                maxLength={2000}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={confirming || holdExpired}
               />
             </Field>
 

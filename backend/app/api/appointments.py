@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Response, status, Query
 from sqlalchemy.orm import Session
@@ -33,6 +34,7 @@ def list_appointments(
     doctor_id: Optional[str] = Query(default=None, description="Filter by doctor profile ID, or the doctor's user ID (Admin only)"),
     patient_id: Optional[str] = Query(default=None, description="Filter by patient ID (Admin only)"),
     status_filter: Optional[AppointmentStatus] = Query(default=None, alias="status", description="Filter by appointment status"),
+    from_time: Optional[datetime] = Query(default=None, alias="from", description="Only appointments starting at or after this time (ISO 8601)"),
     limit: Optional[int] = Query(default=None, ge=1, le=1000, description="Page size. Omit for every match"),
     offset: int = Query(default=0, ge=0, description="Matches to skip, for paging"),
     current_user: User = Depends(get_current_user),
@@ -42,7 +44,7 @@ def list_appointments(
     returns one page; the X-Total-Count header always carries the total that match."""
     result, total = appointment_service.list_appointments(
         db, user=current_user, doctor_id=doctor_id, patient_id=patient_id, status_filter=status_filter,
-        limit=limit, offset=offset,
+        from_time=from_time, limit=limit, offset=offset,
     )
     response.headers["X-Total-Count"] = str(total)
     if current_user.role == UserRole.ADMIN:  # an admin listing everyone's appointments is worth a trail

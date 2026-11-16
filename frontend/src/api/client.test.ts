@@ -206,3 +206,50 @@ describe('account endpoints', () => {
     expect(lastRequest(fetchMock).url).toBe('/api/v1/admin/audit-logs');
   });
 });
+
+describe('appointment lists', () => {
+  it('asks for one page and reads the total from X-Total-Count', async () => {
+    const { api } = await loadClient(false);
+    const fetchMock = stubFetch(
+      () =>
+        new Response(JSON.stringify([{ id: 'a26' }, { id: 'a27' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Total-Count': '27' },
+        }),
+    );
+
+    const page = await api.listAppointmentsPage({ status: 'CONFIRMED', limit: 25, offset: 25 });
+
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/appointments?status=CONFIRMED&limit=25&offset=25');
+    expect(page.items.map((a) => a.id)).toEqual(['a26', 'a27']);
+    expect(page.total).toBe(27);
+  });
+
+  it('falls back to the page length when the total header is missing', async () => {
+    const { api } = await loadClient(false);
+    stubFetch(() => jsonResponse([{ id: 'a1' }]));
+    const page = await api.listAppointmentsPage({ limit: 25, offset: 0 });
+    expect(page.total).toBe(1);
+  });
+
+  it('can ask only for appointments from a given time', async () => {
+    const { api } = await loadClient(false);
+    const fetchMock = stubFetch(() => jsonResponse([]));
+    await api.listAppointments({ from: '2030-01-07T09:00:00.000Z' });
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/appointments?from=2030-01-07T09%3A00%3A00.000Z');
+  });
+
+  it('sends booking notes and a cancellation reason', async () => {
+    const { api } = await loadClient(false);
+    const fetchMock = stubFetch(() => jsonResponse({ id: 'a1' }));
+
+    await api.createAppointment({ doctor_id: 'd1', hold_id: 'h1', notes: 'Wheelchair access please' });
+    expect(JSON.parse(lastRequest(fetchMock).init.body as string)).toEqual({
+      doctor_id: 'd1', hold_id: 'h1', notes: 'Wheelchair access please',
+    });
+
+    await api.cancelAppointment('a1', 'Feeling better');
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/appointments/a1/cancel');
+    expect(JSON.parse(lastRequest(fetchMock).init.body as string)).toEqual({ cancellation_reason: 'Feeling better' });
+  });
+});

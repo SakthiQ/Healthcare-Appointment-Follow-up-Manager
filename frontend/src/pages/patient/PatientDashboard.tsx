@@ -9,7 +9,12 @@ const ACTIVE = new Set(['CONFIRMED', 'RESCHEDULED', 'HELD']);
 
 export default function PatientDashboard() {
   const { user } = useAuth();
-  const { data, loading, error, reload } = useAsync(() => api.listAppointments(), []);
+  // Only appointments from now on: past ones are not shown here, and a long history must
+  // not be downloaded just to find the next few.
+  const { data, loading, error, reload } = useAsync(
+    () => api.listAppointments({ from: new Date().toISOString() }),
+    [],
+  );
 
   const appointments = data ?? [];
   const upcoming = appointments

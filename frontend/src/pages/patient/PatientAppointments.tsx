@@ -4,7 +4,9 @@ import { api } from '../../api/client';
 import type { AppointmentStatus } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
-import { Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from '../../components/ui';
+import { Card, EmptyState, ErrorBanner, Pager, Spinner, StatusBadge } from '../../components/ui';
+
+const PAGE_SIZE = 25;
 
 const FILTERS: { label: string; value: AppointmentStatus | '' }[] = [
   { label: 'All', value: '' },
@@ -17,12 +19,19 @@ const FILTERS: { label: string; value: AppointmentStatus | '' }[] = [
 
 export default function PatientAppointments() {
   const [filter, setFilter] = useState<AppointmentStatus | ''>('');
+  const [page, setPage] = useState(0);
+  // One page at a time: a long history no longer means downloading every appointment.
   const { data, loading, error, reload } = useAsync(
-    () => api.listAppointments(filter ? { status: filter } : undefined),
-    [filter],
+    () =>
+      api.listAppointmentsPage({
+        status: filter || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      }),
+    [filter, page],
   );
 
-  const appointments = data ?? [];
+  const appointments = data?.items ?? [];
 
   return (
     <div className="page">
@@ -43,7 +52,10 @@ export default function PatientAppointments() {
               key={f.value || 'all'}
               type="button"
               className={filter === f.value ? 'pill active' : 'pill'}
-              onClick={() => setFilter(f.value)}
+              onClick={() => {
+                setFilter(f.value);
+                setPage(0);
+              }}
             >
               {f.label}
             </button>
@@ -77,6 +89,9 @@ export default function PatientAppointments() {
               ))}
             </ul>
           )
+        ) : null}
+        {!loading && !error && data ? (
+          <Pager page={page} pageSize={PAGE_SIZE} total={data.total} onPage={setPage} />
         ) : null}
       </Card>
     </div>

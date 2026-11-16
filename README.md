@@ -263,7 +263,7 @@ npm run typecheck && npm test && npm run build
 ```
 
 Backend tests use an isolated in-memory SQLite database (`tests/conftest.py`), not
-`DATABASE_URL`. **249 backend tests and 104 frontend tests, all passing** on the last
+`DATABASE_URL`. **279 backend tests and 113 frontend tests, all passing** on the last
 full run.
 
 SQLite has no row locks, exclusion constraints or real concurrency, so the PostgreSQL-only
@@ -319,14 +319,15 @@ Each entry gives the reasoning behind it.
   the demo flow works; real password-reset and verification emails need real SMTP. In demo
   mode the links appear in the logs only at `LOG_LEVEL=DEBUG`.
 - **Frontend tests cover the API client, auth context, layout, routing, login, the account
-  flows and the audit log**; the booking and consultation pages have no component tests (they
-  were verified by hand in a real browser).
+  flows, the audit log, staff invitations, the admin dashboard and the patient appointment
+  list**; the booking and consultation pages have no component tests (they were verified by
+  hand in a real browser).
 
 ## Project status
 
 All 13 build phases are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 249/249
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 279/279
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app
