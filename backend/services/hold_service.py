@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
+from app.config import settings
 from app.exceptions import NotFoundError, ConflictError, ValidationError, ForbiddenError
 from repositories.doctor_repository import doctor_repository
 from repositories.hold_repository import hold_repository
@@ -48,7 +49,17 @@ class HoldService:
             if max(start_time, appt_start) < min(end_time, appt_end):
                 raise ConflictError("Slot is already booked.")
 
-        # 4. Create Hold
+        # 4. One patient may only hold a few slots at once, or a single account could
+        # keep every free slot of every doctor out of reach, ten minutes at a time.
+        # (Two simultaneous requests can both pass this check; the cap is about stopping
+        # hoarding, so one hold over it is harmless.)
+        cap = settings.MAX_ACTIVE_HOLDS_PER_PATIENT
+        if cap > 0 and hold_repository.count_active_for_patient(db, patient_id) >= cap:
+            raise ConflictError(
+                f"You already have {cap} slot(s) on hold. Confirm or release one before choosing another."
+            )
+
+        # 5. Create Hold
         expires_at = now + timedelta(minutes=hold_duration_minutes)
         hold = hold_repository.create(
             db=db,

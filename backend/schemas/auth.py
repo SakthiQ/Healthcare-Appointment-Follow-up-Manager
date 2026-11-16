@@ -14,7 +14,7 @@ def _password_fits_bcrypt(value: str) -> str:
 
 class UserRegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=6, description="Minimum 6 characters")
+    password: str = Field(..., min_length=8, description="Minimum 8 characters")
     full_name: str = Field(..., min_length=2, description="User full name")
     role: UserRole = Field(default=UserRole.PATIENT, description="User role: PATIENT, DOCTOR, ADMIN")
     specialization: Optional[str] = Field(default=None, description="Required if role is DOCTOR")
@@ -32,7 +32,7 @@ class UserLoginRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=6, description="Minimum 6 characters")
+    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
 
     _password_fits_bcrypt = field_validator("new_password")(_password_fits_bcrypt)
 
@@ -43,7 +43,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., min_length=10, max_length=200)
-    new_password: str = Field(..., min_length=6, description="Minimum 6 characters")
+    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
 
     _password_fits_bcrypt = field_validator("new_password")(_password_fits_bcrypt)
 

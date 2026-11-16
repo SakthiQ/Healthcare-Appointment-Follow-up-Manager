@@ -26,6 +26,7 @@ doesn't mean.
 - [Deployment](#deployment)
 - [Known limitations](#known-limitations)
 - [Project status](#project-status)
+- [Contributing](#contributing)
 
 ## Stack
 
@@ -331,3 +332,18 @@ cleanly, and a genuine security vulnerability found during the final audit was f
 covered by a regression test rather than just written up. It does **not** mean the app
 has been deployed, or that the real (non-mock) AI/email/calendar providers have been
 verified end-to-end — both are stated plainly above rather than implied.
+
+## Contributing
+
+Contributions are welcome, through a maintainer-led process like Google Summer of Code projects:
+the maintainer opens and assigns issues, contributors work on their own fork, and every pull
+request is reviewed and merged by the maintainer.
+
+1. Pick an open issue labelled [`good first issue`](../../labels/good%20first%20issue) or
+   [`help wanted`](../../labels/help%20wanted) and comment to ask for it.
+2. Wait until it is assigned to you, then fork, branch and open a pull request that says
+   `Closes #<issue>`.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting, and follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through [SECURITY.md](SECURITY.md),
+never a public issue.

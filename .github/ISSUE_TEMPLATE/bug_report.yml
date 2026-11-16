@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in the app does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The maintainer triages every report and decides whether to assign it.
+        **Security problems must not be reported here**: use the Security tab instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as a patient
+        2. Open ...
+        3. See error ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Patient portal
+        - Doctor portal
+        - Admin portal
+        - Backend API
+        - Notifications / calendar
+        - AI summaries
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, and whether this is the hosted app or a local setup.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: Remove any personal or health information before pasting.
+      render: shell
+  - type: checkboxes
+    id: work-on-it
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to fix this myself if it is assigned to me

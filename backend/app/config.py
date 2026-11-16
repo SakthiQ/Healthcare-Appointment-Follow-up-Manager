@@ -169,6 +169,19 @@ class Settings(BaseSettings):
     # first admin account".
     ALLOW_PRIVILEGED_SELF_REGISTRATION: bool = False
 
+    # Where the client IP comes from behind proxies (login lockout, per-IP rate limits and
+    # the audit log key on it). See app/core/client_ip.py. CLIENT_IP_HEADER names a header
+    # that the edge proxy sets and overwrites, such as Cloudflare's "CF-Connecting-IP".
+    # TRUSTED_PROXY_HOPS is how many proxies you control append to X-Forwarded-For; the
+    # client IP is the entry that many places from the right. Both unset: the TCP peer.
+    # Never take the leftmost X-Forwarded-For entry: the client writes it.
+    CLIENT_IP_HEADER: Optional[str] = None
+    TRUSTED_PROXY_HOPS: int = 0
+
+    # Slot holds one patient may have at once. A patient booking one appointment needs
+    # one; without a cap a single account could hold every free slot of every doctor.
+    MAX_ACTIVE_HOLDS_PER_PATIENT: int = 2
+
     # Comma-separated list of origins allowed to call the API cross-origin
     # (the deployed frontend's origin(s) in production). Defaults cover local
     # Vite dev only — set explicitly for any hosted deployment.

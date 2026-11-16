@@ -1,0 +1,32 @@
+name: Feature idea
+description: Suggest an improvement. The maintainer decides what gets built and opens tasks for it.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. Please do not start coding until the maintainer has turned the idea into
+        an issue and assigned it to you.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Who is affected (patients, doctors, admins) and what is hard today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: work-on-it
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to build this myself if it is assigned to me

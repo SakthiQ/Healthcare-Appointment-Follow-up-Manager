@@ -107,6 +107,10 @@ export interface Appointment {
   id: string;
   patient_id: string;
   doctor_id: string;
+  /** What the patient wrote when booking. */
+  notes?: string | null;
+  /** Why the appointment was cancelled, if a reason was given. */
+  cancellation_reason?: string | null;
   doctor_profile_id: string | null;
   start_time: string;
   end_time: string;

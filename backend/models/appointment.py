@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 from app.core.datetime_utils import UTCDateTime
-from sqlalchemy import Column, String, Boolean, ForeignKey, Enum as SQLEnum, Index, DDL, event, func, literal_column, text
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum as SQLEnum, Index, DDL, Text, event, func, literal_column, text
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -71,6 +71,10 @@ class Appointment(Base):
     start_time = Column(UTCDateTime(), nullable=False, index=True)
     end_time = Column(UTCDateTime(), nullable=False)
     status = Column(SQLEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.CONFIRMED, index=True)
+    # What the patient wrote when booking, and why the appointment was cancelled (by
+    # whoever cancelled it). Both optional; visible to the patient, the doctor and admins.
+    notes = Column(Text, nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
     created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
