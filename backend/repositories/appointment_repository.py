@@ -174,6 +174,7 @@ class AppointmentRepository:
         doctor_user_id: Optional[str] = None,
         doctor_any_id: Optional[str] = None,
         status_filter: Optional[AppointmentStatus] = None,
+        from_time: Optional[datetime] = None,
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> Tuple[List[Appointment], int]:
@@ -198,6 +199,8 @@ class AppointmentRepository:
             )
         if status_filter:
             query = query.filter(Appointment.status == status_filter)
+        if from_time is not None:
+            query = query.filter(Appointment.start_time >= ensure_utc(from_time))
 
         total = query.order_by(None).count() if (limit is not None or offset) else None
         page = query.options(

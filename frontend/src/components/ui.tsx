@@ -112,6 +112,38 @@ export function Field({
   );
 }
 
+/** Previous / next controls for a list shown one page at a time. Renders nothing for a single page. */
+export function Pager({
+  page,
+  pageSize,
+  total,
+  onPage,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPage: (page: number) => void;
+}) {
+  if (total <= pageSize) return null;
+  const first = page * pageSize + 1;
+  const last = Math.min(total, (page + 1) * pageSize);
+  return (
+    <nav className="pager" aria-label="Pages">
+      <span className="muted small">
+        Showing {first}–{last} of {total}
+      </span>
+      <div className="row-actions">
+        <button type="button" className="btn btn-sm" disabled={page === 0} onClick={() => onPage(page - 1)}>
+          Previous
+        </button>
+        <button type="button" className="btn btn-sm" disabled={last >= total} onClick={() => onPage(page + 1)}>
+          Next
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export function ConfirmDialog({
   open,
   title,

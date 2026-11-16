@@ -405,3 +405,22 @@ def test_a_successful_login_on_file_sqlite_is_fast_and_audited(tmp_path):
     with Session() as check:
         assert check.query(AuditLog).filter_by(action="auth.login").count() == 1
     engine.dispose()
+
+
+def test_appointment_list_can_start_from_a_given_time(client):
+    """The dashboards ask only for appointments from now on instead of a whole history."""
+    admin = _register_login(client, "admin_fromtime@example.com", "ADMIN")
+    doc = _doctor(client, admin, "fromtime")
+    patient = _register_login(client, "patient_fromtime@example.com")
+    early, middle, late = (_book(client, patient, doc, offset, 9) for offset in (110, 111, 112))
+
+    cutoff = datetime.combine(date.today() + timedelta(days=111), time(9, 0), tzinfo=timezone.utc)
+    r = client.get("/api/v1/appointments", params={"from": cutoff.isoformat()}, headers=patient)
+    assert r.status_code == 200
+    assert [a["id"] for a in r.json()] == [middle["id"], late["id"]], "starting exactly at the cutoff counts"
+    assert r.headers["x-total-count"] == "2"
+
+    paged = client.get("/api/v1/appointments", params={"from": cutoff.isoformat(), "limit": 1}, headers=patient)
+    assert [a["id"] for a in paged.json()] == [middle["id"]] and paged.headers["x-total-count"] == "2"
+    assert client.get("/api/v1/appointments", params={"from": "not-a-time"}, headers=patient).status_code == 422
+    assert early["id"] not in {a["id"] for a in r.json()}

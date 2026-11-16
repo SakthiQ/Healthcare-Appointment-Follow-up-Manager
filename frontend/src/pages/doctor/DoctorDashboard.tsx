@@ -9,7 +9,12 @@ const ACTIVE = new Set(['CONFIRMED', 'RESCHEDULED']);
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
-  const { data, loading, error, reload } = useAsync(() => api.listAppointments(), []);
+  // From 24 hours ago: enough to cover "today" in any timezone, without downloading
+  // the doctor's whole history.
+  const { data, loading, error, reload } = useAsync(
+    () => api.listAppointments({ from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() }),
+    [],
+  );
 
   const appointments = data ?? [];
   const now = new Date();

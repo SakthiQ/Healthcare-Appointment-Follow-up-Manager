@@ -166,6 +166,18 @@ export default function DoctorAppointmentDetail() {
           <span>Ends</span>
           <strong>{formatDateTime(appt.end_time, appt.doctor_timezone)}</strong>
         </div>
+        {appt.notes ? (
+          <div className="summary-row">
+            <span>Patient's notes</span>
+            <span className="prewrap">{appt.notes}</span>
+          </div>
+        ) : null}
+        {appt.status === 'CANCELLED' && appt.cancellation_reason ? (
+          <div className="summary-row">
+            <span>Cancellation reason</span>
+            <span className="prewrap">{appt.cancellation_reason}</span>
+          </div>
+        ) : null}
       </Card>
 
       <Card title="Pre-visit AI summary">

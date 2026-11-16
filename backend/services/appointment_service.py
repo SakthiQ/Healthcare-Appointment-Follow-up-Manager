@@ -356,9 +356,10 @@ class AppointmentService:
         status_filter: Optional[AppointmentStatus] = None,
         limit: Optional[int] = None,
         offset: int = 0,
+        from_time: Optional[datetime] = None,
     ) -> Tuple[List[AppointmentResponse], int]:
         """A page of the appointments `user` may see, and the total that match."""
-        filters = {"status_filter": status_filter, "limit": limit, "offset": offset}
+        filters = {"status_filter": status_filter, "limit": limit, "offset": offset, "from_time": from_time}
         if user.role == UserRole.PATIENT:
             filters["patient_id"] = user.id
         elif user.role == UserRole.DOCTOR:

@@ -88,7 +88,8 @@ function extractMessage(body: unknown, status: number): string {
   return `Request failed (HTTP ${status}).`;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+/** Runs a request and returns the parsed body together with the response headers. */
+async function send<T>(path: string, options: RequestInit = {}): Promise<{ body: T; headers: Headers }> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> | undefined),
   };
@@ -118,7 +119,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     );
   }
 
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) return { body: undefined as T, headers: response.headers };
 
   const text = await response.text();
   let body: unknown = null;
@@ -145,7 +146,37 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(extractMessage(body, response.status), response.status, errorCode);
   }
 
-  return body as T;
+  return { body: body as T, headers: response.headers };
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return (await send<T>(path, options)).body;
+}
+
+export interface AppointmentListParams {
+  status?: string;
+  doctor_id?: string;
+  patient_id?: string;
+  /** Only appointments starting at or after this ISO timestamp. */
+  from?: string;
+}
+
+/** One page of appointments and how many match in total (the API's X-Total-Count header). */
+export interface AppointmentPage {
+  items: Appointment[];
+  total: number;
+}
+
+function appointmentQuery(params?: AppointmentListParams & { limit?: number; offset?: number }): string {
+  const q = new URLSearchParams();
+  if (params?.status) q.set('status', params.status);
+  if (params?.doctor_id) q.set('doctor_id', params.doctor_id);
+  if (params?.patient_id) q.set('patient_id', params.patient_id);
+  if (params?.from) q.set('from', params.from);
+  if (params?.limit !== undefined) q.set('limit', String(params.limit));
+  if (params?.offset) q.set('offset', String(params.offset));
+  const qs = q.toString();
+  return `/appointments${qs ? `?${qs}` : ''}`;
 }
 
 /**
@@ -235,13 +266,15 @@ export const api = {
     notes?: string;
   }) => post<Appointment>('/appointments', data),
 
-  listAppointments: (params?: { status?: string; doctor_id?: string; patient_id?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.status) q.set('status', params.status);
-    if (params?.doctor_id) q.set('doctor_id', params.doctor_id);
-    if (params?.patient_id) q.set('patient_id', params.patient_id);
-    const qs = q.toString();
-    return get<Appointment[]>(`/appointments${qs ? `?${qs}` : ''}`);
+  listAppointments: (params?: AppointmentListParams) => get<Appointment[]>(appointmentQuery(params)),
+
+  /** A page of appointments, earliest first, with the total number that match. */
+  listAppointmentsPage: async (
+    params: AppointmentListParams & { limit: number; offset: number },
+  ): Promise<AppointmentPage> => {
+    const { body, headers } = await send<Appointment[]>(appointmentQuery(params));
+    const total = Number(headers.get('X-Total-Count'));
+    return { items: body, total: Number.isFinite(total) && total >= body.length ? total : body.length };
   },
 
   getAppointment: (id: string) => get<Appointment>(`/appointments/${id}`),
