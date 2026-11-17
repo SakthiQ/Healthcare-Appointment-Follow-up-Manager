@@ -81,6 +81,11 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#34](../../issues/34): let admins retry failed notification and calendar jobs
   - [#37](../../issues/37): an optional retention period for the audit log
   - [#46](../../issues/46): search doctors by name
+  - [#51](../../issues/51): send an "appointment rescheduled" email *(bug)*
+  - [#52](../../issues/52): clearer appointment emails with names, links and HTML
+  - [#53](../../issues/53): a dark theme that follows the system setting
+  - [#54](../../issues/54): add an appointment to any calendar (.ics download)
+  - [#57](../../issues/57): CSV export of appointments for admins
 - *Frontend tests:*
   - [#35](../../issues/35): the booking page *(good first issue)*
   - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
@@ -92,8 +97,10 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#38](../../issues/38): stop committed rows leaking between backend tests
   - [#47](../../issues/47): ESLint for the frontend
   - [#48](../../issues/48): Ruff for the backend
-- *Docs:*
+  - [#56](../../issues/56): automated accessibility checks (axe) in the frontend tests
+- *Docs and setup:*
   - [#49](../../issues/49): check the local setup guide on macOS and Linux *(good first issue)*
+  - [#55](../../issues/55): Docker Compose to run the whole app with one command
 
 **Later (direction only, no issues yet):** these are ideas the project is heading towards, not
 promises. Please don't open pull requests for them. If one interests you, start a
