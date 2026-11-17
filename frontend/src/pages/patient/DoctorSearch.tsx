@@ -5,18 +5,22 @@ import { useAsync } from '../../lib/useAsync';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 
 export default function DoctorSearch() {
-  const [input, setInput] = useState('');
-  const [query, setQuery] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [specInput, setSpecInput] = useState('');
+  const [query, setQuery] = useState({ name: '', specialization: '' });
 
   const { data, loading, error, reload } = useAsync(
-    () => api.searchDoctors(query || undefined),
-    [query],
+    () => api.searchDoctors(query),
+    [query.name, query.specialization],
   );
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setQuery(input.trim());
+    setQuery({ name: nameInput.trim(), specialization: specInput.trim() });
   }
+
+  const searching = Boolean(query.name || query.specialization);
+  const searchLabel = [query.name, query.specialization].filter(Boolean).join(', ');
 
   const doctors = data ?? [];
 
@@ -25,31 +29,41 @@ export default function DoctorSearch() {
       <header className="page-head">
         <div>
           <h1>Find a doctor</h1>
-          <p className="muted">Search by specialisation, then pick an available slot.</p>
+          <p className="muted">Search by name or specialisation, then pick an available slot.</p>
         </div>
       </header>
 
       <Card>
         <form className="search-bar" onSubmit={handleSubmit}>
+          <label className="sr-only" htmlFor="doctor-name">
+            Doctor's name
+          </label>
+          <input
+            id="doctor-name"
+            placeholder="Doctor's name, e.g. Rao"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+          />
           <label className="sr-only" htmlFor="specialization">
             Specialisation
           </label>
           <input
             id="specialization"
-            placeholder="e.g. Cardiology, Paediatrics, Dermatology"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            placeholder="Specialisation, e.g. Cardiology"
+            value={specInput}
+            onChange={(e) => setSpecInput(e.target.value)}
           />
           <button type="submit" className="btn btn-primary">
             Search
           </button>
-          {query ? (
+          {searching ? (
             <button
               type="button"
               className="btn"
               onClick={() => {
-                setInput('');
-                setQuery('');
+                setNameInput('');
+                setSpecInput('');
+                setQuery({ name: '', specialization: '' });
               }}
             >
               Clear
@@ -58,13 +72,14 @@ export default function DoctorSearch() {
         </form>
       </Card>
 
-      <Card title={query ? `Doctors matching "${query}"` : 'All available doctors'}>
+      <Card title={searching ? `Doctors matching "${searchLabel}"` : 'All available doctors'}>
         {loading ? <Spinner label="Searching…" /> : null}
         <ErrorBanner error={error} onRetry={reload} />
         {!loading && !error ? (
           doctors.length === 0 ? (
             <EmptyState>
-              No doctors found{query ? ` for "${query}"` : ''}. Try a different specialisation.
+              No doctors found{searching ? ` for "${searchLabel}"` : ''}. Try a different name or
+              specialisation.
             </EmptyState>
           ) : (
             <div className="grid">

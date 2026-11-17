@@ -22,16 +22,17 @@ def _is_admin(user: Optional[User]) -> bool:
 
 @router.get("", response_model=List[DoctorResponse], status_code=status.HTTP_200_OK)
 def search_doctors(
-    specialization: Optional[str] = Query(default=None, description="Filter doctors by specialization"),
+    specialization: Optional[str] = Query(default=None, max_length=100, description="Filter doctors by specialization (part of it, any case)"),
+    name: Optional[str] = Query(default=None, max_length=100, description="Filter doctors by name (part of it, any case)"),
     current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
-    """Search doctors by specialization. Public: active doctors only, without the
+    """Search doctors by specialization and/or name. Public: active doctors only, without the
     doctor's login email or account id. Admins get those fields, and every doctor,
     so a deactivated one can still be found and reactivated."""
     is_admin = _is_admin(current_user)
     return doctor_service.search_doctors(
-        db, specialization=specialization, active_only=not is_admin, include_private=is_admin
+        db, specialization=specialization, name=name, active_only=not is_admin, include_private=is_admin
     )
 
 
