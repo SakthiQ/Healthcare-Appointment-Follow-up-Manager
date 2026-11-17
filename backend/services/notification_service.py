@@ -174,6 +174,21 @@ class NotificationService:
             )
             return "Appointment Cancelled", f"Your appointment on {when} has been cancelled."
 
+        if job.notification_type == NotificationType.APPOINTMENT_RESCHEDULED:
+            if not appointment:
+                raise ValueError("Appointment not found for reschedule notice.")
+            new_when = self._local_when(appointment)
+            previous = payload.get("previous_start_time")
+            if previous:
+                old_when = self._local_when(appointment, datetime.fromisoformat(previous))
+                body = (
+                    f"Your appointment has been moved from {old_when} to {new_when}.\n\n"
+                    f"Please come at the new time: {new_when}. The old time is no longer booked."
+                )
+            else:
+                body = f"Your appointment has been moved. The new time is {new_when}."
+            return "Appointment Rescheduled", body
+
         if job.notification_type == NotificationType.DOCTOR_LEAVE_CONFLICT:
             original_start = payload.get("original_start_time", "the scheduled time")
             if payload.get("reason") == "doctor_deactivated":
@@ -238,11 +253,11 @@ class NotificationService:
         raise ValueError(f"Unknown notification type: {job.notification_type}")
 
     @staticmethod
-    def _local_when(appointment) -> str:
-        """The appointment start in the doctor's own timezone, e.g.
-        "2030-01-07 14:30 IST" ("... UTC" for a UTC doctor)."""
+    def _local_when(appointment, moment=None) -> str:
+        """A time in the doctor's own timezone, e.g. "2030-01-07 14:30 IST" ("... UTC" for a
+        UTC doctor). Defaults to the appointment's start."""
         zone = get_zone(appointment.doctor.timezone if appointment.doctor else None)
-        local = ensure_utc(appointment.start_time).astimezone(zone)
+        local = ensure_utc(moment if moment is not None else appointment.start_time).astimezone(zone)
         return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
 
 
