@@ -203,8 +203,10 @@ class AppointmentService:
         except Exception:
             _abandon_failed_side_effect(db, appt, f"arm calendar {operation} sync")
 
-    def _safe_queue_reschedule_notifications(self, db: Session, appt: Appointment) -> None:
-        """Announce the new time to both parties and re-arm the reminder.
+    def _safe_queue_reschedule_notifications(
+        self, db: Session, appt: Appointment, previous_start: datetime
+    ) -> None:
+        """Tell both parties the appointment moved (old and new time) and re-arm the reminder.
 
         Reminders already queued for the OLD time are superseded first —
         otherwise the patient is reminded about a time the appointment has
@@ -216,11 +218,15 @@ class AppointmentService:
                 db, appt.id, NotificationType.APPOINTMENT_REMINDER,
                 reason="Superseded: appointment rescheduled.",
             )
-            payload = {"appointment_id": appt.id, "start_time": appt.start_time.isoformat()}
+            payload = {
+                "appointment_id": appt.id,
+                "previous_start_time": ensure_utc(previous_start).isoformat(),
+                "start_time": ensure_utc(appt.start_time).isoformat(),
+            }
             for recipient_id in (appt.patient_id, appt.doctor_id):
                 notification_service.queue_notification(
                     db, appointment_id=appt.id, recipient_id=recipient_id,
-                    notification_type=NotificationType.BOOKING_CONFIRMATION,
+                    notification_type=NotificationType.APPOINTMENT_RESCHEDULED,
                     payload=payload,
                 )
             reminder_service.schedule_appointment_reminder(db, appt)
@@ -301,11 +307,12 @@ class AppointmentService:
         if overlapping:
             raise ConflictError("Target slot is already booked.")
 
+        previous_start = appt.start_time
         updated_appt = appointment_repository.reschedule(
             db=db, appointment=appt, new_start_time=new_start_time, new_end_time=new_end_time
         )
         response = AppointmentResponse.model_validate(updated_appt)
-        self._safe_queue_reschedule_notifications(db, updated_appt)
+        self._safe_queue_reschedule_notifications(db, updated_appt, previous_start)
         self._safe_sync_calendar(db, updated_appt, "rescheduled")
         return response
 

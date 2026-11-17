@@ -117,6 +117,35 @@ def test_booking_creates_confirmation_jobs_for_patient_and_doctor(client, db_ses
     assert all(j.status == NotificationStatus.PENDING for j in jobs)
 
 
+def test_reschedule_sends_a_rescheduled_notice_with_both_times(client, db_session):
+    doc, _, patient_headers, _ = setup_notification_test_env(client)
+    next_monday = get_next_monday()
+    start_dt = datetime.combine(next_monday, time(9, 0), tzinfo=timezone.utc)
+    end_dt = datetime.combine(next_monday, time(9, 30), tzinfo=timezone.utc)
+    appt = book_appointment(client, patient_headers, doc["id"], start_dt, end_dt)
+
+    r = client.post(f"/api/v1/appointments/{appt['id']}/reschedule", json={
+        "new_start_time": datetime.combine(next_monday, time(10, 0), tzinfo=timezone.utc).isoformat(),
+        "new_end_time": datetime.combine(next_monday, time(10, 30), tzinfo=timezone.utc).isoformat(),
+    }, headers=patient_headers)
+    assert r.status_code == 200, r.text
+
+    # No second "confirmed" email: the original two stay the only confirmations.
+    assert len(get_jobs_for_appointment(db_session, appt["id"], NotificationType.BOOKING_CONFIRMATION)) == 2
+    moved = get_jobs_for_appointment(db_session, appt["id"], NotificationType.APPOINTMENT_RESCHEDULED)
+    assert {j.recipient_id for j in moved} == {appt["patient_id"], appt["doctor_id"]}
+
+    provider = _RecordingEmailProvider()
+    service = NotificationService(provider=provider)
+    for job in moved:
+        assert service.process_job(db_session, job).status == NotificationStatus.SENT
+
+    day = next_monday.isoformat()
+    for email in provider.sent:
+        assert email["subject"] == "Appointment Rescheduled"
+        assert f"from {day} 09:00 UTC to {day} 10:00 UTC" in email["body"]
+
+
 def test_booking_also_schedules_appointment_reminder_for_patient_and_doctor(client, db_session):
     doc, _, patient_headers, _ = setup_notification_test_env(client)
     next_monday = get_next_monday()

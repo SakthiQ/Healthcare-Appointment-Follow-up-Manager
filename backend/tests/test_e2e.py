@@ -526,11 +526,10 @@ def test_e2e_reschedule_workflow(client, db_session, clinic):
         )
 
     # --- required notifications for the new time (patient + doctor) ---
-    confirmations = jobs_for(db_session, appt["id"], NotificationType.BOOKING_CONFIRMATION)
-    # 2 from the original booking + 2 announcing the new time
-    assert len(confirmations) == 4
-    recent = sorted(confirmations, key=lambda j: j.created_at)[-2:]
-    assert {j.recipient_id for j in recent} == {appt["patient_id"], appt["doctor_id"]}
+    # The booking confirmations stay at 2; the move is announced with its own notice.
+    assert len(jobs_for(db_session, appt["id"], NotificationType.BOOKING_CONFIRMATION)) == 2
+    moved = jobs_for(db_session, appt["id"], NotificationType.APPOINTMENT_RESCHEDULED)
+    assert {j.recipient_id for j in moved} == {appt["patient_id"], appt["doctor_id"]}
 
     # --- stale reminders for the OLD time must not still be pending ---
     reminders = jobs_for(db_session, appt["id"], NotificationType.APPOINTMENT_REMINDER)
