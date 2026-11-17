@@ -32,13 +32,13 @@ doesn't mean.
 
 | Layer | Choice |
 |---|---|
-| Backend | Python 3.14 + FastAPI |
+| Backend | Python 3.12+ + FastAPI |
 | Database | PostgreSQL (SQLite fallback for local dev/tests) |
 | ORM / Migrations | SQLAlchemy + Alembic |
 | Validation | Pydantic |
 | Auth | JWT (PyJWT) + bcrypt |
 | Background jobs | Four simple polling workers: notifications, calendar, hold expiry, housekeeping (no broker/queue) |
-| Frontend | React 18 + TypeScript + Vite, React Router, plain `fetch` |
+| Frontend | React 19 + TypeScript + Vite, React Router, plain `fetch` |
 | Testing | pytest (backend) and Vitest + Testing Library (frontend), run by CI — see [Running tests](#running-tests) |
 
 No microservices, Kafka, Kubernetes, Redis, RAG, or multi-agent frameworks — a modular
@@ -79,16 +79,19 @@ mechanisms specifically.
 
 ## Setup
 
-Requires Python 3.11+ and Node 18+.
+Requires Python 3.12+ and Node 22 LTS (22.22+) or 24 LTS. **New here? Follow the step-by-step
+[local setup guide](docs/local-setup.md)** (Windows, macOS and Linux, with demo accounts and
+troubleshooting).
 
 ```bash
 # Backend
 cd backend
 python -m venv .venv
 .venv/Scripts/activate          # Windows; use `source .venv/bin/activate` on macOS/Linux
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 cp .env.example .env            # defaults work out of the box (SQLite + DEMO_MODE=True)
 alembic upgrade head
+python -m scripts.seed_demo     # optional: demo admin, doctor and patient (password: demo-password)
 python -m uvicorn app.main:app --reload
 # → http://localhost:8000 , docs at http://localhost:8000/api/v1/docs
 ```
@@ -96,7 +99,7 @@ python -m uvicorn app.main:app --reload
 ```bash
 # Frontend (separate terminal)
 cd frontend
-npm install
+npm ci
 cp .env.example .env            # defaults proxy to http://localhost:8000
 npm run dev
 # → http://localhost:5173
@@ -263,7 +266,7 @@ npm run typecheck && npm test && npm run build
 ```
 
 Backend tests use an isolated in-memory SQLite database (`tests/conftest.py`), not
-`DATABASE_URL`. **279 backend tests and 113 frontend tests, all passing** on the last
+`DATABASE_URL`. **284 backend tests and 113 frontend tests, all passing** on the last
 full run.
 
 SQLite has no row locks, exclusion constraints or real concurrency, so the PostgreSQL-only
@@ -327,7 +330,7 @@ Each entry gives the reasoning behind it.
 
 All 13 build phases are complete. **"Complete" here means:** every
 requirement has real code, a real test, or documented manual verification behind it
-(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 279/279
+(see `docs/requirement-mapping.md` — nothing is marked done without evidence), 284/284
 backend tests pass in a freshly-migrated environment, the frontend builds and typechecks
 cleanly, and a genuine security vulnerability found during the final audit was fixed and
 covered by a regression test rather than just written up. It does **not** mean the app

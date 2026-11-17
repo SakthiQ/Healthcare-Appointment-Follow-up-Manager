@@ -7,6 +7,7 @@ from app.database import get_db
 from app.main import create_app
 from models.user import UserRole
 from scripts.create_admin import CreateAdminError, create_admin
+from scripts import seed_demo
 
 
 def test_postgres_scheme_normalized_for_sqlalchemy():
@@ -81,3 +82,37 @@ def test_create_admin_script_creates_admin(db_session):
 def test_create_admin_script_rejects_short_password(db_session):
     with pytest.raises(CreateAdminError):
         create_admin(db_session, "short_pw_admin@example.com", "Admin", "short")
+
+
+def test_seed_demo_creates_one_account_per_role_and_is_idempotent(client, db_session):
+    first = seed_demo.seed(db_session)
+    assert [line.split()[0] for line in first] == ["created", "created", "created"]
+    second = seed_demo.seed(db_session)
+    assert [line.split()[0] for line in second] == ["exists", "exists", "exists"]
+
+    for email, role in [
+        (seed_demo.ADMIN_EMAIL, "ADMIN"),
+        (seed_demo.DOCTOR_EMAIL, "DOCTOR"),
+        (seed_demo.PATIENT_EMAIL, "PATIENT"),
+    ]:
+        resp = client.post("/api/v1/auth/login", json={"email": email, "password": seed_demo.DEMO_PASSWORD})
+        assert resp.status_code == 200, (email, resp.text)
+        me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {resp.json()['access_token']}"})
+        assert me.json()["role"] == role
+
+    # The doctor is bookable: listed publicly, with Monday-Friday working hours.
+    doctors = client.get("/api/v1/doctors").json()
+    demo = [d for d in doctors if d["full_name"] == "Dr Demo"]
+    assert len(demo) == 1
+    hours = client.get(f"/api/v1/doctors/{demo[0]['id']}/schedule").json()
+    assert sorted(h["day_of_week"] for h in hours) == [0, 1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("environment, demo_mode", [("production", True), ("Production", True), ("development", False)])
+def test_seed_demo_refuses_outside_demo_mode_or_in_production(environment, demo_mode):
+    with pytest.raises(seed_demo.SeedRefused):
+        seed_demo.check_allowed(environment, demo_mode)
+
+
+def test_seed_demo_allowed_in_local_demo_mode():
+    seed_demo.check_allowed("development", True)

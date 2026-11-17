@@ -1,6 +1,6 @@
 # Frontend — Patient, Doctor & Admin Portals
 
-React 18 + TypeScript + Vite. Three role-specific portals over the existing
+React 19 + TypeScript + Vite. Three role-specific portals over the existing
 backend API. No mock data anywhere — every screen calls real endpoints.
 
 ## Setup

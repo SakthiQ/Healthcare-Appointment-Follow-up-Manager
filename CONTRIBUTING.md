@@ -27,28 +27,33 @@ maintainer will triage it.
 
 You will work on your own copy (a *fork*); you do not need write access to this repository.
 
+**Follow [docs/local-setup.md](docs/local-setup.md)** for step-by-step instructions on
+Windows, macOS and Linux. It covers installing the tools, running the backend and frontend,
+signing in with demo accounts, running the tests and troubleshooting.
+
+The short version, for those who have done this before (Python 3.12+, Node 22 LTS or 24 LTS):
+
 ```bash
-# 1. Fork on GitHub, then clone your fork
 git clone https://github.com/<your-username>/Healthcare-Appointment-Follow-up-Manager.git
 cd Healthcare-Appointment-Follow-up-Manager
 git remote add upstream https://github.com/SakthiQ/Healthcare-Appointment-Follow-up-Manager.git
 
-# 2. Backend (Python 3.12)
-cd backend
+cd backend                    # then create and activate a virtual environment
 pip install -r requirements.txt -c constraints.txt
-cp .env.example .env          # defaults work: SQLite + DEMO_MODE, no external accounts needed
+cp .env.example .env          # defaults work: SQLite + DEMO_MODE, no accounts or keys needed
 alembic upgrade head
+python -m scripts.seed_demo   # demo admin, doctor and patient (password: demo-password)
 python -m uvicorn app.main:app --reload     # http://localhost:8000/api/v1/docs
 
-# 3. Frontend (Node 22, separate terminal)
-cd frontend
+cd frontend                   # in a second terminal
 npm ci
 cp .env.example .env
 npm run dev                   # http://localhost:5173
 ```
 
 `DEMO_MODE=True` replaces the AI, email and calendar integrations with offline mocks, so the
-whole app runs without any API keys. See the [README](README.md) for more detail.
+whole app runs without any API keys. You never need the maintainer's credentials, and you
+should never put your own in a committed file.
 
 ## Making a change
 
