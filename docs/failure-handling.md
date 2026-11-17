@@ -93,6 +93,10 @@ concurrent requests, exactly 1 succeeds).
   state, which is the expected eventually-consistent window inherent to a polling worker
   design (see Deployment Architecture in `docs/architecture.md` for polling interval).
 - **A provider that is down for longer than `MAX_ATTEMPTS × backoff`.** The job becomes
-  `FAILED` (terminal) and is not automatically retried further. An operator would need to
-  reset `status`/`attempts` manually (no admin endpoint for this exists — recorded as a
-  known limitation, see Known limitations in the root `README.md`).
+  `FAILED` (terminal) and is not automatically retried further. Once the provider is back,
+  an admin lists these with `GET /api/v1/admin/failed-jobs?kind=notification|calendar` and
+  puts one back in the queue with `POST /api/v1/admin/notifications/{id}/retry` or
+  `POST /api/v1/admin/calendar-events/{id}/retry` (attempts reset, audited). Jobs that must
+  not be sent any more are refused with `409`: reminders superseded on purpose, password-reset,
+  verification and invitation emails (their link is wiped when the job finishes), and
+  appointment emails for an appointment cancelled since.

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, Response, status, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import rate_limited_per_user, require_role
@@ -8,10 +8,11 @@ from models.appointment import AppointmentStatus
 from models.user import User, UserRole
 from repositories.appointment_repository import appointment_repository
 from repositories.doctor_repository import doctor_repository
-from schemas.admin import AdminStatsResponse
+from schemas.admin import AdminStatsResponse, FailedJobKind, FailedJobResponse
 from services.audit_service import audit_service
 from services.doctor_service import doctor_service
 from services.invitation_service import invitation_service
+from services.job_retry_service import job_retry_service
 from services.schedule_service import schedule_service
 from services.leave_service import leave_service
 from services.doctor_leave_service import doctor_leave_service
@@ -224,3 +225,51 @@ def revoke_invitation(
     audit_service.record(
         db, "invitation.revoke", actor=current_user, resource_type="invitation", resource_id=invitation_id,
     )
+
+
+@router.get("/failed-jobs", response_model=List[FailedJobResponse], status_code=status.HTTP_200_OK)
+def list_failed_jobs(
+    response: Response,
+    kind: FailedJobKind = Query(default=FailedJobKind.NOTIFICATION, description="notification or calendar"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Email or calendar jobs that used up their retries, newest first. Each says whether it
+    can be retried and, if not, why. The X-Total-Count header carries the total."""
+    items, total = job_retry_service.list_failed(db, kind, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return items
+
+
+@router.post("/notifications/{job_id}/retry", response_model=FailedJobResponse, status_code=status.HTTP_200_OK)
+def retry_notification(
+    job_id: str,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Put a FAILED email back in the queue (attempts reset). 409 if it is not FAILED or must
+    not be sent any more; 404 if it does not exist."""
+    result = job_retry_service.retry_notification(db, job_id)
+    audit_service.record(
+        db, "notification.retry", actor=current_user, resource_type="notification_job", resource_id=job_id,
+        detail={"type": result.type, "appointment_id": result.appointment_id},
+    )
+    return result
+
+
+@router.post("/calendar-events/{row_id}/retry", response_model=FailedJobResponse, status_code=status.HTTP_200_OK)
+def retry_calendar_event(
+    row_id: str,
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Put a FAILED calendar sync back in the queue (attempts reset). 409 if it is not FAILED
+    or has nothing left to do; 404 if it does not exist."""
+    result = job_retry_service.retry_calendar(db, row_id)
+    audit_service.record(
+        db, "calendar.retry", actor=current_user, resource_type="calendar_event", resource_id=row_id,
+        detail={"type": result.type, "appointment_id": result.appointment_id},
+    )
+    return result
