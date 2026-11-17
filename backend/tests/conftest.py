@@ -52,6 +52,21 @@ def setup_test_database():
     Base.metadata.drop_all(bind=test_engine)
 
 
+@pytest.fixture(autouse=True)
+def _empty_tables_after_each_test():
+    """Start every test from an empty database.
+
+    Services commit for real, and the threaded tests need those commits visible to other
+    sessions, so the rollback in db_session cannot undo them. Instead, every row is deleted
+    once the test (and its fixtures) are done. Child tables go first, so the order also
+    works with foreign keys switched on.
+    """
+    yield
+    with test_engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+
 @pytest.fixture
 def db_session():
     """Provide a transactional database session for testing."""
