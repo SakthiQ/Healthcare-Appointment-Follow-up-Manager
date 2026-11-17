@@ -446,8 +446,6 @@ Each limitation comes with the reason for it, and some link to the open issue th
 - **SQLite tests can't prove multi-connection safety.** SQLite runs everything one at a time
   in-process. The real proof is `backend/scripts/verify_postgres.py`, which CI runs against
   PostgreSQL.
-- **Committed rows can leak between backend tests** when a test commits more than once.
-  Affected tests use scoped assertions for now. → [#38](../../issues/38)
 - **A `FAILED` notification or calendar job can't be retried from the app.** An operator has
   to reset it in the database. → [#34](../../issues/34)
 - **The audit log has no retention period.** Audit writes are best-effort: a failed write is
