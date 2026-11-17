@@ -74,13 +74,26 @@ The project grows in stages. Each piece of work becomes an issue before anyone s
 email notifications, calendar sync, staff invitations, the audit log, security hardening,
 load protection with automatic retry, and CI with PostgreSQL checks.
 
-**Next (open issues you can ask for):**
+**Next (open issues you can ask for):** the [issues page](../../issues) always has the current
+list. New contributors should start with [`good first issue`](../../labels/good%20first%20issue).
 
-- [#34](../../issues/34): let admins retry failed notification and calendar jobs
-- [#35](../../issues/35): component tests for the booking page *(good first issue)*
-- [#36](../../issues/36): component tests for the doctor's appointment and consultation page *(good first issue)*
-- [#37](../../issues/37): an optional retention period for the audit log
-- [#38](../../issues/38): stop committed rows leaking between backend tests
+- *Features:*
+  - [#34](../../issues/34): let admins retry failed notification and calendar jobs
+  - [#37](../../issues/37): an optional retention period for the audit log
+  - [#46](../../issues/46): search doctors by name
+- *Frontend tests:*
+  - [#35](../../issues/35): the booking page *(good first issue)*
+  - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
+  - [#42](../../issues/42): the patient's doctor search and dashboard *(good first issue)*
+  - [#43](../../issues/43): the patient's appointment detail page
+  - [#44](../../issues/44): the doctor's appointment lists and the admin conflicts page *(good first issue)*
+  - [#45](../../issues/45): the admin doctor management and doctor settings pages
+- *Code quality:*
+  - [#38](../../issues/38): stop committed rows leaking between backend tests
+  - [#47](../../issues/47): ESLint for the frontend
+  - [#48](../../issues/48): Ruff for the backend
+- *Docs:*
+  - [#49](../../issues/49): check the local setup guide on macOS and Linux *(good first issue)*
 
 **Later (direction only, no issues yet):** these are ideas the project is heading towards, not
 promises. Please don't open pull requests for them. If one interests you, start a
