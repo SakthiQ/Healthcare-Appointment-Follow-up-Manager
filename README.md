@@ -405,7 +405,7 @@ npm run typecheck && npm test && npm run build
 ```
 
 Backend tests use their own in-memory SQLite database (`tests/conftest.py`), not
-`DATABASE_URL`. At the last full run, **all 284 backend tests and 118 frontend tests
+`DATABASE_URL`. At the last full run, **all 284 backend tests and 122 frontend tests
 passed**.
 
 SQLite has no row locks, exclusion constraints or real concurrency. A separate script,

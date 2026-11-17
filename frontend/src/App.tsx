@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { Analytics } from '@vercel/analytics/react';
+import { VercelInsights } from './lib/insights';
 import Layout from './components/Layout';
 import ProtectedRoute from './auth/ProtectedRoute';
 import { useAuth, homePathForRole } from './auth/AuthContext';
@@ -181,7 +181,7 @@ export default function App() {
           <Route path="*" element={<RootRedirect />} />
         </Route>
       </Routes>
-      <Analytics />
+      <VercelInsights />
     </>
   );
 }
