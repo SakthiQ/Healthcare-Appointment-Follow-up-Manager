@@ -88,8 +88,54 @@ function extractMessage(body: unknown, status: number): string {
   return `Request failed (HTTP ${status}).`;
 }
 
-/** Runs a request and returns the parsed body together with the response headers. */
+/** How many times a request is sent again after the server answers "busy". */
+export const BUSY_RETRIES = 2;
+/** Longest wait between busy retries, whatever Retry-After says. */
+const MAX_BUSY_WAIT_MS = 5_000;
+/** Up to this much random extra wait, so clients turned away together don't all come back at once. */
+const BUSY_JITTER_MS = 500;
+
+/** How long to wait before retrying a busy response: Retry-After seconds (default 1), capped, plus jitter. */
+function busyDelayMs(headers: Headers): number {
+  const seconds = Number(headers.get('Retry-After'));
+  const base = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000;
+  return Math.min(base, MAX_BUSY_WAIT_MS) + Math.random() * BUSY_JITTER_MS;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Runs a request and returns the parsed body together with the response headers.
+ *
+ *  When the API is at capacity it answers 503 with error_code SERVER_BUSY before the
+ *  request reaches any endpoint, so nothing was done and it is safe to send again, for
+ *  POSTs as well as GETs. Those responses are retried up to BUSY_RETRIES times, so a short
+ *  spike shows up as a slower page instead of an error. Any other 503 is not retried. */
 async function send<T>(path: string, options: RequestInit = {}): Promise<{ body: T; headers: Headers }> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await sendOnce<T>(path, options);
+    } catch (error) {
+      const busy = error instanceof BusyError;
+      if (!busy) throw error;
+      if (attempt >= BUSY_RETRIES || options.signal?.aborted) throw error.apiError;
+      await sleep(busyDelayMs(error.headers));
+    }
+  }
+}
+
+/** Internal: a SERVER_BUSY answer, carrying the error to show if the retries run out. */
+class BusyError extends Error {
+  constructor(
+    readonly apiError: ApiError,
+    readonly headers: Headers,
+  ) {
+    super(apiError.message);
+  }
+}
+
+async function sendOnce<T>(path: string, options: RequestInit): Promise<{ body: T; headers: Headers }> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> | undefined),
   };
@@ -143,7 +189,9 @@ async function send<T>(path: string, options: RequestInit = {}): Promise<{ body:
       clearToken();
       unauthorizedHandler?.();
     }
-    throw new ApiError(extractMessage(body, response.status), response.status, errorCode);
+    const apiError = new ApiError(extractMessage(body, response.status), response.status, errorCode);
+    if (response.status === 503 && errorCode === 'SERVER_BUSY') throw new BusyError(apiError, response.headers);
+    throw apiError;
   }
 
   return { body: body as T, headers: response.headers };

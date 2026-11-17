@@ -268,7 +268,9 @@ prevent it:
 - `MAX_CONCURRENT_REQUESTS` (default 12): requests one process works on at once. A request
   beyond that waits, holding no thread or connection, up to `REQUEST_QUEUE_TIMEOUT_SECONDS`
   (default 2) for a place, first come first served; only then does it get `503` with
-  `Retry-After: 1`, and the frontend shows "the server is busy". Short bursts are absorbed,
+  `Retry-After: 1`. The frontend then waits that long (plus up to 0.5 s of random spread)
+  and sends the request again, up to twice, before it shows "the server is busy". That is
+  safe for bookings too, because a rejected request never reached an endpoint. Short bursts are absorbed,
   sustained overload gets quick answers instead of a stall. `/health` is never capped, so
   the platform does not restart a server that is merely busy.
 - `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` (default 10 + 20): must be at least
