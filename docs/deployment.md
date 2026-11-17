@@ -66,6 +66,12 @@ up to a minute while it wakes. Upgrade the plan if that matters.
 4. If you used a placeholder in step 2.2, go back to Render, set `CORS_ALLOWED_ORIGINS`
    to the real Vercel URL, and save (Render redeploys automatically). Until then,
    register/login fail with a CORS error in the browser console.
+5. Optional: open the project's **Analytics** and **Speed Insights** tabs and click
+   **Enable** on each. The frontend already includes both (`frontend/src/lib/insights.tsx`).
+   They are cookieless, and they send nothing until they're turned on here. Before
+   anything is sent, every URL is stripped of its query string (invitation, password-reset
+   and verification tokens) and of record IDs, so the reports show which pages are used,
+   not which patient or appointment was viewed.
 
 ## Creating the first admin
 

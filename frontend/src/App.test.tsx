@@ -6,7 +6,7 @@ import App from './App';
 import { useAuth } from './auth/AuthContext';
 import { makeAuth, makeUser } from './test/helpers';
 
-vi.mock('@vercel/analytics/react', () => ({ Analytics: () => null }));
+vi.mock('./lib/insights', () => ({ VercelInsights: () => null }));
 vi.mock('./auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./auth/AuthContext')>()),
   useAuth: vi.fn(),
