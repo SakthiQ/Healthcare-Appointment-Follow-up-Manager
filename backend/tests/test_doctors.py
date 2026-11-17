@@ -116,6 +116,57 @@ def test_specialization_search_and_inactive_doctor_behavior(client):
     assert d3["id"] in derm_ids, "Dermatology doctor should appear in search results"
 
 
+def test_search_by_name_combines_with_specialization_and_hides_inactive(client):
+    admin_headers = get_admin_headers(client)
+
+    def make(email, name, spec):
+        return client.post("/api/v1/admin/doctors", json={
+            "email": email, "password": "pass1234", "full_name": name, "specialization": spec,
+        }, headers=admin_headers).json()
+
+    rao = make("rao@example.com", "Dr. Priya Rao", "Cardiology")
+    rao_derm = make("rao2@example.com", "Dr. Arun Rao", "Dermatology")
+    other = make("menon@example.com", "Dr. Kavya Menon", "Cardiology")
+    gone = make("raoold@example.com", "Dr. Old Rao", "Cardiology")
+    client.patch(f"/api/v1/admin/doctors/{gone['id']}/status?is_active=false", headers=admin_headers)
+
+    def ids(params):
+        r = client.get("/api/v1/doctors", params=params)
+        assert r.status_code == 200, r.text
+        return {d["id"] for d in r.json()}
+
+    # Part of the name, any case; inactive doctors stay hidden from the public search.
+    assert ids({"name": "rao"}) == {rao["id"], rao_derm["id"]}
+    assert ids({"name": "  PRIYA "}) == {rao["id"]}
+    # Name and specialization together.
+    assert ids({"name": "rao", "specialization": "cardio"}) == {rao["id"]}
+    assert other["id"] in ids({"specialization": "Cardiology"})
+
+
+def test_search_treats_like_wildcards_literally(client):
+    admin_headers = get_admin_headers(client)
+    plain = client.post("/api/v1/admin/doctors", json={
+        "email": "plain@example.com", "password": "pass1234", "full_name": "Dr. Plain",
+        "specialization": "General Practice",
+    }, headers=admin_headers).json()
+    odd = client.post("/api/v1/admin/doctors", json={
+        "email": "odd@example.com", "password": "pass1234", "full_name": "Dr. 100% Sure_Name",
+        "specialization": "Odd_Spec",
+    }, headers=admin_headers).json()
+
+    def ids(params):
+        return {d["id"] for d in client.get("/api/v1/doctors", params=params).json()}
+
+    # "%" and "_" used to be wildcards, so they matched every doctor.
+    assert ids({"name": "_"}) == {odd["id"]}
+    assert ids({"name": "%"}) == {odd["id"]}
+    assert ids({"specialization": "_"}) == {odd["id"]}
+    assert ids({"name": "100%"}) == {odd["id"]}
+    assert plain["id"] not in ids({"name": "\\"})
+    # A blank search means no filter.
+    assert {plain["id"], odd["id"]} <= ids({"name": "   "})
+
+
 def test_working_hours_configuration_and_invalid_schedule_rejection(client):
     """Test configuring working hours and rejecting invalid schedules."""
     admin_headers = get_admin_headers(client)

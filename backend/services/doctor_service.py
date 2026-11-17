@@ -169,9 +169,9 @@ class DoctorService:
 
     def search_doctors(
         self, db: Session, specialization: Optional[str] = None, active_only: bool = True,
-        include_private: bool = False,
+        include_private: bool = False, name: Optional[str] = None,
     ) -> List[DoctorResponse]:
-        doctors = doctor_repository.search(db, specialization=specialization, active_only=active_only)
+        doctors = doctor_repository.search(db, specialization=specialization, active_only=active_only, name=name)
         return [self._to_response(d, include_private=include_private) for d in doctors]
 
 

@@ -285,8 +285,13 @@ export const api = {
     post<MessageResponse>('/auth/resend-verification', { email }),
 
   // --- Doctors (public / patient) ---
-  searchDoctors: (specialization?: string) =>
-    get<Doctor[]>(`/doctors${specialization ? `?specialization=${encodeURIComponent(specialization)}` : ''}`),
+  searchDoctors: (filters: { specialization?: string; name?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.specialization?.trim()) params.set('specialization', filters.specialization.trim());
+    if (filters.name?.trim()) params.set('name', filters.name.trim());
+    const query = params.toString();
+    return get<Doctor[]>(`/doctors${query ? `?${query}` : ''}`);
+  },
 
   getDoctor: (doctorId: string) => get<Doctor>(`/doctors/${doctorId}`),
 

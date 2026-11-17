@@ -48,6 +48,22 @@ describe('authentication in Bearer mode (the default)', () => {
   });
 });
 
+describe('searchDoctors', () => {
+  it('sends only the filters that are filled in, trimmed and encoded', async () => {
+    const { api } = await loadClient(false);
+    const fetchMock = stubFetch(() => jsonResponse([]));
+
+    await api.searchDoctors();
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/doctors');
+
+    await api.searchDoctors({ name: '  Dr Rao ', specialization: ' ' });
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/doctors?name=Dr+Rao');
+
+    await api.searchDoctors({ specialization: 'Cardiology', name: '100%' });
+    expect(lastRequest(fetchMock).url).toBe('/api/v1/doctors?specialization=Cardiology&name=100%25');
+  });
+});
+
 describe('authentication in cookie mode', () => {
   it('keeps only a marker in localStorage, never the token', async () => {
     const { setToken, getToken } = await loadClient(true);

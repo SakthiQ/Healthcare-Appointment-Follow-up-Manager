@@ -5,6 +5,13 @@ from models.user import User, UserRole
 from models.doctor import Doctor, DoctorWorkingHours, DoctorLeave
 
 
+def _contains(text: str) -> str:
+    """A LIKE pattern matching `text` anywhere, with %, _ and the escape character itself
+    matched literally (searching for "_" must not match every doctor)."""
+    escaped = text.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 class DoctorRepository:
     def get_by_id(self, db: Session, doctor_id: str, with_for_update: bool = False) -> Optional[Doctor]:
         """with_for_update locks the doctor row until the transaction ends. Booking,
@@ -19,7 +26,10 @@ class DoctorRepository:
     def get_by_user_id(self, db: Session, user_id: str) -> Optional[Doctor]:
         return db.query(Doctor).filter(Doctor.user_id == user_id).first()
 
-    def search(self, db: Session, specialization: Optional[str] = None, active_only: bool = True) -> List[Doctor]:
+    def search(
+        self, db: Session, specialization: Optional[str] = None, active_only: bool = True,
+        name: Optional[str] = None,
+    ) -> List[Doctor]:
         # contains_eager fills Doctor.user from the join this query already does, so
         # building the responses (name, email) costs no extra query per doctor.
         query = (
@@ -29,8 +39,10 @@ class DoctorRepository:
         )
         if active_only:
             query = query.filter(Doctor.is_active.is_(True), User.is_active.is_(True))
-        if specialization:
-            query = query.filter(Doctor.specialization.ilike(f"%{specialization.strip()}%"))
+        if specialization and specialization.strip():
+            query = query.filter(Doctor.specialization.ilike(_contains(specialization), escape="\\"))
+        if name and name.strip():
+            query = query.filter(User.full_name.ilike(_contains(name), escape="\\"))
         return query.order_by(User.full_name, Doctor.id).all()
 
     def count_active(self, db: Session) -> int:
