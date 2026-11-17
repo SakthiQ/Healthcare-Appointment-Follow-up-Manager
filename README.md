@@ -266,7 +266,7 @@ npm run typecheck && npm test && npm run build
 ```
 
 Backend tests use an isolated in-memory SQLite database (`tests/conftest.py`), not
-`DATABASE_URL`. **284 backend tests and 113 frontend tests, all passing** on the last
+`DATABASE_URL`. **284 backend tests and 118 frontend tests, all passing** on the last
 full run.
 
 SQLite has no row locks, exclusion constraints or real concurrency, so the PostgreSQL-only

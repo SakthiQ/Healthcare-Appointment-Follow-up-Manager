@@ -253,3 +253,99 @@ describe('appointment lists', () => {
     expect(JSON.parse(lastRequest(fetchMock).init.body as string)).toEqual({ cancellation_reason: 'Feeling better' });
   });
 });
+
+describe('when the server is busy', () => {
+  function busy(retryAfter = '1') {
+    return new Response(
+      JSON.stringify({ detail: 'The server is busy right now. Please try again in a moment.', error_code: 'SERVER_BUSY' }),
+      { status: 503, headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter } },
+    );
+  }
+
+  /** Answers with each response in turn, then keeps repeating the last one. */
+  function sequence(...responses: (() => Response)[]) {
+    let i = 0;
+    return stubFetch(() => responses[Math.min(i++, responses.length - 1)]());
+  }
+
+  it('waits for Retry-After and sends the request again', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = await loadClient(false);
+      const fetchMock = sequence(() => busy('2'), () => jsonResponse({ id: 'u1' }));
+
+      const result = api.me();
+      await vi.advanceTimersByTimeAsync(1_900);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // still waiting out the 2 s
+      await vi.advanceTimersByTimeAsync(700); // 2 s plus at most 0.5 s jitter
+
+      await expect(result).resolves.toEqual({ id: 'u1' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a POST too, because a busy request never reached the endpoint', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = await loadClient(false);
+      const fetchMock = sequence(busy, () => jsonResponse({ id: 'a1' }, 201));
+
+      const result = api.createAppointment({ doctor_id: 'd1', start_time: 's', end_time: 'e' });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      await expect(result).resolves.toEqual({ id: 'a1' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(lastRequest(fetchMock).init.method).toBe('POST');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after two retries and shows the busy message', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api, ApiError, BUSY_RETRIES } = await loadClient(false);
+      const fetchMock = sequence(busy);
+
+      const result = api.me().catch((e) => e);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const error = await result;
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.status).toBe(503);
+      expect(error.errorCode).toBe('SERVER_BUSY');
+      expect(error.message).toBe('The server is busy right now. Please try again in a moment.');
+      expect(fetchMock).toHaveBeenCalledTimes(1 + BUSY_RETRIES);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('caps a long Retry-After at 5 seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api } = await loadClient(false);
+      const fetchMock = sequence(() => busy('120'), () => jsonResponse({ id: 'u1' }));
+
+      const result = api.me();
+      await vi.advanceTimersByTimeAsync(5_600);
+
+      await expect(result).resolves.toEqual({ id: 'u1' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry a 503 that is not the busy signal', async () => {
+    const { api } = await loadClient(false);
+    const fetchMock = stubFetch(() => jsonResponse({ detail: 'Service Unavailable' }, 503));
+
+    const error = await api.me().catch((e) => e);
+
+    expect(error.status).toBe(503);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
