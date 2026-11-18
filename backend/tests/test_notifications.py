@@ -66,7 +66,7 @@ class _RecordingEmailProvider(EmailProvider):
     def __init__(self):
         self.sent: List[Dict[str, Any]] = []
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
+    def send(self, to_email: str, subject: str, body: str, html=None) -> None:
         self.sent.append({"to": to_email, "subject": subject, "body": body})
 
 
@@ -74,7 +74,7 @@ class _AlwaysFailingProvider(EmailProvider):
     def __init__(self, exc: Exception):
         self._exc = exc
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
+    def send(self, to_email: str, subject: str, body: str, html=None) -> None:
         raise self._exc
 
 
@@ -85,7 +85,7 @@ class _FlakyThenSucceedsProvider(EmailProvider):
         self.fail_times = fail_times
         self.attempts = 0
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
+    def send(self, to_email: str, subject: str, body: str, html=None) -> None:
         self.attempts += 1
         if self.attempts <= self.fail_times:
             raise EmailProviderTransientError("temporary SMTP outage")
