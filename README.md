@@ -342,7 +342,7 @@ summary:
 | Slots & holds | `/api/v1/slots` | create/get/release a hold |
 | Appointments | `/api/v1/appointments` | book, list, get, reschedule, cancel |
 | AI & clinical | `/api/v1/appointments/{id}/...` | symptom-report, consultation, pre/post-visit AI summaries |
-| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, staff invitations (`/admin/invitations`), audit log (`GET /admin/audit-logs`) |
+| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, staff invitations (`/admin/invitations`), audit log (`GET /admin/audit-logs`), failed email and calendar jobs (`GET /admin/failed-jobs`, `POST .../retry`) |
 
 ### Database schema
 
@@ -446,8 +446,6 @@ Each limitation comes with the reason for it, and some link to the open issue th
 - **SQLite tests can't prove multi-connection safety.** SQLite runs everything one at a time
   in-process. The real proof is `backend/scripts/verify_postgres.py`, which CI runs against
   PostgreSQL.
-- **A `FAILED` notification or calendar job can't be retried from the app.** An operator has
-  to reset it in the database. → [#34](../../issues/34)
 - **The audit log has no retention period.** Audit writes are best-effort: a failed write is
   logged and the request carries on, so a problem with the audit table can't take patient care
   offline. Entries are never edited or deleted. → [#37](../../issues/37)
