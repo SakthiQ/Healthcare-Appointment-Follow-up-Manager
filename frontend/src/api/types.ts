@@ -221,6 +221,30 @@ export interface InvitationLookup {
   expires_at: string;
 }
 
+/** `notification` is an email job; `calendar` is a calendar sync. */
+export type FailedJobKind = 'notification' | 'calendar';
+
+/** A job that used up its retries (GET /admin/failed-jobs). */
+export interface FailedJob {
+  id: string;
+  kind: FailedJobKind;
+  /** The email type, or the calendar operation and whose calendar it is. */
+  type: string;
+  status: string;
+  appointment_id: string | null;
+  attempts: number;
+  last_error: string | null;
+  /** When it last changed, which for a failed job is when it failed. */
+  updated_at: string;
+  retryable: boolean;
+  not_retryable_reason: string | null;
+}
+
+export interface FailedJobPage {
+  items: FailedJob[];
+  total: number;
+}
+
 export interface AuditLogPage {
   items: AuditLogEntry[];
   total: number;

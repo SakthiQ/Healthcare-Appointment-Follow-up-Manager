@@ -27,6 +27,7 @@ import DoctorManagement from './pages/admin/DoctorManagement';
 import DoctorConfig from './pages/admin/DoctorConfig';
 import ConflictedAppointments from './pages/admin/ConflictedAppointments';
 import AuditLog from './pages/admin/AuditLog';
+import FailedJobs from './pages/admin/FailedJobs';
 import Invitations from './pages/admin/Invitations';
 
 function RootRedirect() {
@@ -165,6 +166,15 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN']}>
                 <Invitations />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/failed-jobs"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <FailedJobs />
               </ProtectedRoute>
             }
           />

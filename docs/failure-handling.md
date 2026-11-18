@@ -94,7 +94,9 @@ concurrent requests, exactly 1 succeeds).
   design (see Deployment Architecture in `docs/architecture.md` for polling interval).
 - **A provider that is down for longer than `MAX_ATTEMPTS × backoff`.** The job becomes
   `FAILED` (terminal) and is not automatically retried further. Once the provider is back,
-  an admin lists these with `GET /api/v1/admin/failed-jobs?kind=notification|calendar` and
+  an admin retries them from the **Failed jobs** page in the admin portal
+  (`/admin/failed-jobs`, one tab for emails and one for calendar syncs). Behind it, the
+  page lists them with `GET /api/v1/admin/failed-jobs?kind=notification|calendar` and
   puts one back in the queue with `POST /api/v1/admin/notifications/{id}/retry` or
   `POST /api/v1/admin/calendar-events/{id}/retry` (attempts reset, audited). Jobs that must
   not be sent any more are refused with `409`: reminders superseded on purpose, password-reset,

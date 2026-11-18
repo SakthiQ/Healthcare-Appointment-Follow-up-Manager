@@ -7,6 +7,9 @@ import type {
   Consultation,
   Doctor,
   DoctorLeave,
+  FailedJob,
+  FailedJobKind,
+  FailedJobPage,
   Hold,
   Invitation,
   InvitationCreated,
@@ -397,6 +400,26 @@ export const api = {
     const qs = q.toString();
     return get<AuditLogPage>(`/admin/audit-logs${qs ? `?${qs}` : ''}`);
   },
+
+  /** A page of failed email or calendar jobs, newest first, with the total (X-Total-Count). */
+  listFailedJobs: async (params: { kind: FailedJobKind; limit: number; offset: number }): Promise<FailedJobPage> => {
+    const q = new URLSearchParams({
+      kind: params.kind,
+      limit: String(params.limit),
+      offset: String(params.offset),
+    });
+    const { body, headers } = await send<FailedJob[]>(`/admin/failed-jobs?${q.toString()}`);
+    const total = Number(headers.get('X-Total-Count'));
+    return { items: body, total: Number.isFinite(total) && total >= body.length ? total : body.length };
+  },
+
+  /** Put a failed job back in the queue. 409 when it can no longer be retried. */
+  retryFailedJob: (job: Pick<FailedJob, 'id' | 'kind'>) =>
+    post<FailedJob>(
+      job.kind === 'calendar'
+        ? `/admin/calendar-events/${encodeURIComponent(job.id)}/retry`
+        : `/admin/notifications/${encodeURIComponent(job.id)}/retry`,
+    ),
 
   createInvitation: (data: {
     email: string;
