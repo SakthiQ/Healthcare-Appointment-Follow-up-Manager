@@ -145,7 +145,7 @@ def test_medication_reminder_email_does_not_name_the_drug():
     from models.notification import NotificationType
     job.notification_type = NotificationType.MEDICATION_REMINDER
 
-    subject, body = notification_service._build_content(None, job)
+    subject, body, _ = notification_service._build_content(None, job)
     assert subject == "Medication Reminder"
     for secret in ("Sertraline", "50mg", "Once daily"):
         assert secret not in body

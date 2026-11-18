@@ -278,13 +278,21 @@ AIProvider (abstract)
 
 ```
 EmailProvider (abstract)
-├── RealEmailProvider  # Sends via SendGrid/Mailgun/similar
-└── MockEmailProvider  # Logs email to console/file
+├── RealEmailProvider  # Sends over SMTP (Brevo, SendGrid, Mailgun, SES…)
+└── MockEmailProvider  # Records sends in memory, never touches the network
 ```
 
-- Input: recipient, subject, body, template
+- Input: recipient, subject, plain-text body, and an optional HTML body
 - Output: success/failure
 - Failure: notification job marked for retry
+- Content: `services/email_templates.py` builds both bodies from the same paragraphs, so
+  the wording lives in one place (`NotificationService._build_content`). With an HTML
+  body, `RealEmailProvider` sends `multipart/alternative` (text first, then HTML).
+  The HTML uses inline styles only, loads nothing from elsewhere, and escapes every value.
+- Appointment emails name the other person (the doctor and their specialisation for
+  the patient, the patient for the doctor) and link to the appointment at
+  `{FRONTEND_BASE_URL}/patient/appointments/{id}` or `/doctor/appointments/{id}`.
+  They never include symptoms, diagnoses or prescriptions: email is not a private channel.
 
 ### Calendar Provider
 

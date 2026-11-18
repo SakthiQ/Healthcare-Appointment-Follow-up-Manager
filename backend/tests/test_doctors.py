@@ -348,7 +348,7 @@ def test_deactivating_a_doctor_blocks_sign_in_and_resolves_upcoming_appointments
     jobs = db_session.query(NotificationJob).filter(NotificationJob.appointment_id == appt["id"]).all()
     conflict_jobs = [j for j in jobs if j.notification_type == NotificationType.DOCTOR_LEAVE_CONFLICT]
     assert len(conflict_jobs) == 1 and conflict_jobs[0].recipient_id == appt["patient_id"]
-    _, body = notification_service._build_content(db_session, conflict_jobs[0])
+    body = notification_service._build_content(db_session, conflict_jobs[0]).text
     assert "no longer available" in body and "book a new appointment" in body
     # Nothing still queued says the appointment is going ahead.
     going_ahead = [j for j in jobs if j.notification_type in (

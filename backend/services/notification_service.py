@@ -15,6 +15,7 @@ from providers.email_provider import (
     EmailProviderPermanentError,
     get_email_provider,
 )
+from services.email_templates import EmailContent, render_email
 
 logger = logging.getLogger(__name__)
 
@@ -131,14 +132,16 @@ class NotificationService:
             return notification_repository.mark_failed_permanent(db, job, "Notification has no recipient.")
 
         try:
-            subject, body = self._build_content(db, job)
+            content = self._build_content(db, job)
         except Exception as exc:  # noqa: BLE001 - content-building failure is not retryable
             return notification_repository.mark_failed_permanent(
                 db, job, f"Failed to build notification content: {exc}"
             )
 
         try:
-            self._provider().send(to_email=to_email, subject=subject, body=body)
+            self._provider().send(
+                to_email=to_email, subject=content.subject, body=content.text, html=content.html
+            )
         except EmailProviderPermanentError as exc:
             return notification_repository.mark_failed_permanent(db, job, str(exc))
         except Exception as exc:  # noqa: BLE001 - transient provider failure (timeout, unavailable, etc.)
@@ -151,28 +154,44 @@ class NotificationService:
 
         return notification_repository.mark_sent(db, job)
 
-    def _build_content(self, db: Session, job: NotificationJob) -> tuple:
+    def _build_content(self, db: Session, job: NotificationJob) -> EmailContent:
+        """Subject, plain-text body and HTML body for a job. Appointment emails name the
+        other person and link to the appointment in the app. They never carry clinical
+        details (symptoms, diagnosis, prescriptions): email is not a private channel."""
         payload = json.loads(job.payload) if job.payload else {}
         appointment = appointment_repository.get_by_id(db, job.appointment_id) if job.appointment_id else None
+        view = _RecipientView(appointment, getattr(job, "recipient_id", None))
 
         if job.notification_type == NotificationType.BOOKING_CONFIRMATION:
             if not appointment:
                 raise ValueError("Appointment not found for booking confirmation.")
             when = self._local_when(appointment)
-            return "Appointment Confirmed", f"Your appointment on {when} has been confirmed."
+            if view.is_doctor:
+                line = f"A new appointment{view.with_other} has been booked for {when}."
+            else:
+                line = f"Your appointment{view.with_other} on {when} has been confirmed."
+            return render_email("Appointment Confirmed", [line], view.link, "View appointment")
 
         if job.notification_type == NotificationType.APPOINTMENT_REMINDER:
             if not appointment:
                 raise ValueError("Appointment not found for appointment reminder.")
             when = self._local_when(appointment)
-            return "Appointment Reminder", f"Reminder: you have an appointment on {when}."
+            return render_email(
+                "Appointment Reminder",
+                [f"Reminder: you have an appointment{view.with_other} on {when}."],
+                view.link, "View appointment",
+            )
 
         if job.notification_type == NotificationType.CANCELLATION:
             when = (
                 self._local_when(appointment)
                 if appointment else payload.get("original_start_time", "the scheduled time")
             )
-            return "Appointment Cancelled", f"Your appointment on {when} has been cancelled."
+            return render_email(
+                "Appointment Cancelled",
+                [f"Your appointment{view.with_other} on {when} has been cancelled."],
+                view.link, "View appointment",
+            )
 
         if job.notification_type == NotificationType.APPOINTMENT_RESCHEDULED:
             if not appointment:
@@ -181,13 +200,13 @@ class NotificationService:
             previous = payload.get("previous_start_time")
             if previous:
                 old_when = self._local_when(appointment, datetime.fromisoformat(previous))
-                body = (
-                    f"Your appointment has been moved from {old_when} to {new_when}.\n\n"
-                    f"Please come at the new time: {new_when}. The old time is no longer booked."
-                )
+                lines = [
+                    f"Your appointment{view.with_other} has been moved from {old_when} to {new_when}.",
+                    f"Please come at the new time: {new_when}. The old time is no longer booked.",
+                ]
             else:
-                body = f"Your appointment has been moved. The new time is {new_when}."
-            return "Appointment Rescheduled", body
+                lines = [f"Your appointment{view.with_other} has been moved. The new time is {new_when}."]
+            return render_email("Appointment Rescheduled", lines, view.link, "View appointment")
 
         if job.notification_type == NotificationType.DOCTOR_LEAVE_CONFLICT:
             original_start = payload.get("original_start_time", "the scheduled time")
@@ -196,20 +215,26 @@ class NotificationService:
                 why = "the doctor is no longer available"
             else:
                 why = f"the doctor is unavailable on {payload.get('leave_date', 'the requested date')}"
-            return (
+            return render_email(
                 "Appointment Cancelled Due to Doctor Unavailability",
-                f"Your appointment originally scheduled for {original_start} could not be kept because "
-                f"{why}. Please book a new appointment."
+                [
+                    f"Your appointment{view.with_other} originally scheduled for {original_start} "
+                    f"could not be kept because {why}. Please book a new appointment."
+                ],
+                f"{_frontend_base()}/patient/doctors", "Book a new appointment",
             )
 
         if job.notification_type == NotificationType.MEDICATION_REMINDER:
             # Deliberately no drug name, dose or frequency: email is not a private
             # channel, and what someone takes reveals what they are being treated
             # for. The details stay in the app behind the patient's login.
-            return (
+            return render_email(
                 "Medication Reminder",
-                "Reminder: it is time to take your prescribed medication. "
-                "Sign in to the app to see your prescription and schedule."
+                [
+                    "Reminder: it is time to take your prescribed medication. "
+                    "Sign in to the app to see your prescription and schedule."
+                ],
+                view.link, "See your prescription",
             )
 
         if job.notification_type == NotificationType.PASSWORD_RESET:
@@ -217,11 +242,14 @@ class NotificationService:
             if not link:
                 raise ValueError("Password reset notification has no link.")
             minutes = payload.get("expires_minutes", 30)
-            return (
+            return render_email(
                 "Reset your password",
-                "Someone (hopefully you) asked to reset the password for your account." + "\n\n"
-                + f"Open this link within {minutes} minutes to choose a new one:" + "\n" + link + "\n\n"
-                + "If you did not ask for this, ignore this email. Your password will not change.",
+                [
+                    "Someone (hopefully you) asked to reset the password for your account.",
+                    f"Open this link within {minutes} minutes to choose a new one:",
+                ],
+                link, "Choose a new password",
+                footer="If you did not ask for this, ignore this email. Your password will not change.",
             )
 
         if job.notification_type == NotificationType.EMAIL_VERIFICATION:
@@ -229,10 +257,11 @@ class NotificationService:
             if not link:
                 raise ValueError("Email verification notification has no link.")
             hours = payload.get("expires_hours", 24)
-            return (
+            return render_email(
                 "Confirm your email address",
-                f"Please confirm your email address by opening this link within {hours} hours:" + "\n" + link
-                + "\n\nIf you did not create an account, ignore this email.",
+                [f"Please confirm your email address by opening this link within {hours} hours:"],
+                link, "Confirm my email",
+                footer="If you did not create an account, ignore this email.",
             )
 
         if job.notification_type == NotificationType.INVITATION:
@@ -242,12 +271,16 @@ class NotificationService:
             role_label = "an administrator" if payload.get("role") == "ADMIN" else "a doctor"
             inviter = payload.get("invited_by") or "An administrator"
             days = payload.get("expires_days", 7)
-            return (
+            return render_email(
                 "You are invited to join Healthcare Manager",
-                f"{inviter} has invited you to join as {role_label}." + "\n\n"
-                + f"Open this link within {days} days to create your account. You will choose your own password:" + "\n"
-                + link + "\n\n"
-                + "If you were not expecting this, ignore this email. No account is created until you open the link.",
+                [
+                    f"{inviter} has invited you to join as {role_label}.",
+                    f"Open this link within {days} days to create your account. "
+                    "You will choose your own password:",
+                ],
+                link, "Create my account",
+                footer="If you were not expecting this, ignore this email. "
+                "No account is created until you open the link.",
             )
 
         raise ValueError(f"Unknown notification type: {job.notification_type}")
@@ -259,6 +292,34 @@ class NotificationService:
         zone = get_zone(appointment.doctor.timezone if appointment.doctor else None)
         local = ensure_utc(moment if moment is not None else appointment.start_time).astimezone(zone)
         return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
+
+
+def _frontend_base() -> str:
+    return settings.FRONTEND_BASE_URL.rstrip("/")
+
+
+class _RecipientView:
+    """Who an appointment email is for, and so whom it names and where it links. The
+    patient sees the doctor's name and specialisation and a link to the patient page;
+    the doctor sees the patient's name and a link to the doctor page."""
+
+    def __init__(self, appointment, recipient_id: Optional[str]):
+        self.is_doctor = bool(appointment) and recipient_id is not None and recipient_id == appointment.doctor_id
+        self.with_other = ""
+        self.link: Optional[str] = None
+        if not appointment:
+            return
+        if self.is_doctor:
+            patient = appointment.patient
+            if patient and patient.full_name:
+                self.with_other = f" with {patient.full_name}"
+        else:
+            doctor = appointment.doctor
+            name = doctor.user.full_name if doctor and doctor.user else None
+            if name:
+                self.with_other = f" with {name} ({doctor.specialization})"
+        portal = "doctor" if self.is_doctor else "patient"
+        self.link = f"{_frontend_base()}/{portal}/appointments/{appointment.id}"
 
 
 notification_service = NotificationService()

@@ -91,7 +91,7 @@ class RecordingEmailProvider(EmailProvider):
     def __init__(self):
         self.sent = []
 
-    def send(self, to_email, subject, body):
+    def send(self, to_email, subject, body, html=None):
         self.sent.append({"to": to_email, "subject": subject, "body": body})
 
 
@@ -100,7 +100,7 @@ class FailingEmailProvider(EmailProvider):
         self._exc = exc
         self.attempts = 0
 
-    def send(self, to_email, subject, body):
+    def send(self, to_email, subject, body, html=None):
         self.attempts += 1
         raise self._exc
 

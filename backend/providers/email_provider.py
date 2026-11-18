@@ -5,7 +5,9 @@ import abc
 import logging
 import smtplib
 import ssl
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Optional
 
 from app.config import settings
 
@@ -26,8 +28,9 @@ class EmailProviderPermanentError(EmailProviderError):
 
 class EmailProvider(abc.ABC):
     @abc.abstractmethod
-    def send(self, to_email: str, subject: str, body: str) -> None:
-        """Raise EmailProviderTransientError / EmailProviderPermanentError on failure."""
+    def send(self, to_email: str, subject: str, body: str, html: Optional[str] = None) -> None:
+        """Send `body` as plain text, plus `html` as an alternative part when given.
+        Raise EmailProviderTransientError / EmailProviderPermanentError on failure."""
 
 
 class MockEmailProvider(EmailProvider):
@@ -37,8 +40,8 @@ class MockEmailProvider(EmailProvider):
     def __init__(self):
         self.sent_emails = []
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
-        self.sent_emails.append({"to": to_email, "subject": subject, "body": body})
+    def send(self, to_email: str, subject: str, body: str, html: Optional[str] = None) -> None:
+        self.sent_emails.append({"to": to_email, "subject": subject, "body": body, "html": html})
         logger.info("MockEmailProvider: would send to=%s subject=%r", to_email, subject)
         # The body can hold a one-time link, so it is only logged at DEBUG (set LOG_LEVEL=DEBUG
         # locally to follow a password-reset or verification link in demo mode).
@@ -59,8 +62,15 @@ class RealEmailProvider(EmailProvider):
         self._timeout = settings.SMTP_TIMEOUT_SECONDS
         self._from_address = settings.EMAIL_FROM_ADDRESS
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
-        message = MIMEText(body, "plain", "utf-8")
+    def send(self, to_email: str, subject: str, body: str, html: Optional[str] = None) -> None:
+        if html:
+            # Plain text first, HTML last: mail apps show the last part they can display,
+            # so apps without HTML still get the text.
+            message = MIMEMultipart("alternative")
+            message.attach(MIMEText(body, "plain", "utf-8"))
+            message.attach(MIMEText(html, "html", "utf-8"))
+        else:
+            message = MIMEText(body, "plain", "utf-8")
         message["Subject"] = subject
         message["From"] = self._from_address
         message["To"] = to_email
