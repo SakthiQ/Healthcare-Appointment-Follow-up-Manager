@@ -72,20 +72,30 @@ The project grows in stages. Each piece of work becomes an issue before anyone s
 
 **Done (v0.2):** appointments, the three portals, AI pre-visit and post-visit summaries,
 email notifications, calendar sync, staff invitations, the audit log, security hardening,
-load protection with automatic retry, and CI with PostgreSQL checks.
+load protection with automatic retry, and CI with PostgreSQL checks. Since then: search by
+doctor name, a proper "appointment rescheduled" email, admin retry of failed jobs, and a
+clean database for every backend test.
 
 **Next (open issues you can ask for):** the [issues page](../../issues) always has the current
 list. New contributors should start with [`good first issue`](../../labels/good%20first%20issue).
 
-- *Features:*
-  - [#34](../../issues/34): let admins retry failed notification and calendar jobs
-  - [#37](../../issues/37): an optional retention period for the audit log
-  - [#46](../../issues/46): search doctors by name
-  - [#51](../../issues/51): send an "appointment rescheduled" email *(bug)*
-  - [#52](../../issues/52): clearer appointment emails with names, links and HTML
-  - [#53](../../issues/53): a dark theme that follows the system setting
+- *For patients:*
+  - [#66](../../issues/66): see your whole visit history in one place
+  - [#67](../../issues/67): record allergies and date of birth for your doctor
+  - [#71](../../issues/71): join a waitlist for a fully booked day
   - [#54](../../issues/54): add an appointment to any calendar (.ics download)
-  - [#57](../../issues/57): CSV export of appointments for admins
+  - [#72](../../issues/72): use the app in Tamil or Hindi
+  - [#53](../../issues/53): a dark theme that follows the system setting
+- *For doctors:*
+  - [#69](../../issues/69): see your own weekly hours and leave
+  - [#68](../../issues/68): mark an appointment as a no-show
+  - [#73](../../issues/73): an AI summary of the patient's previous visits
+- *For admins and the hospital:*
+  - [#70](../../issues/70): group doctors into departments
+  - [#65](../../issues/65): a page to retry failed emails and calendar syncs
+  - [#57](../../issues/57): CSV export of appointments
+  - [#52](../../issues/52): clearer appointment emails with names, links and HTML
+  - [#37](../../issues/37): an optional retention period for the audit log
 - *Frontend tests:*
   - [#35](../../issues/35): the booking page *(good first issue)*
   - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
@@ -94,7 +104,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#44](../../issues/44): the doctor's appointment lists and the admin conflicts page *(good first issue)*
   - [#45](../../issues/45): the admin doctor management and doctor settings pages
 - *Code quality:*
-  - [#38](../../issues/38): stop committed rows leaking between backend tests
   - [#47](../../issues/47): ESLint for the frontend
   - [#48](../../issues/48): Ruff for the backend
   - [#56](../../issues/56): automated accessibility checks (axe) in the frontend tests
@@ -106,11 +115,9 @@ list. New contributors should start with [`good first issue`](../../labels/good%
 promises. Please don't open pull requests for them. If one interests you, start a
 conversation with a [feature request](../../issues/new/choose).
 
-- *Hospital scope:* departments, wards and beds, several branches in one system, and
-  patient records that carry visit history from one appointment to the next.
+- *Hospital scope:* wards and beds, and several branches in one system.
 - *Clinical modules:* lab and imaging results, pharmacy stock, billing and insurance claims.
-- *More AI help:* a guided symptom-intake chat, no-show prediction and smarter scheduling,
-  and summaries of a patient's history for the doctor.
+- *More AI help:* a guided symptom-intake chat, no-show prediction and smarter scheduling.
 - *Running at scale:* separate worker processes, caching for busy read pages, and metrics
   and tracing for operators.
 
