@@ -304,6 +304,37 @@ prevent it:
 purpose. 10,000 people signing in within the same minute needs roughly 35 cores for that alone;
 spreading sign-ins out (sessions last `ACCESS_TOKEN_EXPIRE_MINUTES`) is what keeps it affordable.
 
+**Measuring it yourself.** `backend/scripts/load_test.py` runs simulated signed-in patients
+against a server. Each browses the doctor list, a doctor's profile, a day's slots, their
+appointments and their account, pausing 1-3 s between requests. It steps the number of users
+up until 95% of responses no longer come back within 500 ms or more than 1% fail. Then it
+measures logins, and with `--slot-race` has 100 new patients hold the same slot at once. Run it
+against a local server, never production (it refuses a server whose `/health` says
+`production`):
+
+```bash
+cd backend
+export DATABASE_URL=sqlite:///./bench.db DEMO_MODE=True RATE_LIMITING_ENABLED=False
+python -m alembic upgrade head && python -m scripts.seed_demo
+python -m uvicorn app.main:app --port 8765 --no-access-log &
+python -m scripts.load_test --base-url http://127.0.0.1:8765 --slot-race
+```
+
+Rate limits are off because one machine plays every user. One run on 19 Nov 2026 (one process,
+SQLite, a 22-core machine, default settings):
+
+| Concurrent users | Requests/s | p50 | p95 | Errors |
+|---|---|---|---|---|
+| 200 | 89 | 5 ms | 11 ms | 0% |
+| 400 | 179 | 9 ms | 25 ms | 0% |
+| 600 | 266 | 17 ms | 51 ms | 0% |
+| 800 | 239 | 280 ms | 4.6 s | 0% (fails the 500 ms rule) |
+
+Logins: 35 per second. Slot race: one hold created, 99 refused with `409`. The 800-user step
+was partly limited by the load generator, a single Python process on the same machine; run it
+from another machine to find the server's own ceiling. A 0.1-CPU free instance manages about a
+tenth of these figures.
+
 ## Reproducible installs and CI
 
 - Install the backend with `pip install -r requirements.txt -c constraints.txt` (the Render build command does). `constraints.txt` pins every package to the version CI tests. To update the pins, run `python scripts/refresh_constraints.py` (use the same Python minor version as `PYTHON_VERSION` in `render.yaml`), run the tests, review the diff and commit. `python scripts/check_constraints.py` fails if anything installed is unpinned or has drifted. `uvloop` is Linux-only, so it is pinned in `constraints-extras.txt`; if CI reports an unpinned package, add it there.

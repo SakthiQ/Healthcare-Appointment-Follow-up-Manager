@@ -437,8 +437,9 @@ create the first admin on the hosted database. The frontend works only once
 One web process works on `MAX_CONCURRENT_REQUESTS` (12) requests at once. A request beyond
 that waits up to 2 seconds, then gets a quick `503 Server busy` answer, and the frontend retries
 it automatically. The server never stalls under a burst. In a local load test with the
-production settings, one process handled about 110 requests a second of mixed traffic. When 100
-patients raced for the same slot, exactly one got it. To handle more traffic, run more
+production settings (`backend/scripts/load_test.py`), one process served **600 signed-in users
+browsing at once** at 266 requests a second, with 95% of responses under 51 ms and no errors.
+When 100 patients raced for the same slot, exactly one got it. To handle more traffic, run more
 processes or instances on PostgreSQL; [docs/deployment.md](docs/deployment.md#capacity-and-scaling)
 explains how.
 
