@@ -16,6 +16,60 @@
   --info-bg: #e8f1fb;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  /* Colours that used to be written in the rules below, with the same values. */
+  --on-primary: #fff;
+  --primary-light: #4b9bff;
+  --danger-fg: var(--danger); /* danger as text; the dark theme lightens it */
+  --danger-border: #f3c6c2;
+  --danger-text: #7d1c17;
+  --ok-border: #b8e3d2;
+  --ok-text: #0c5c43;
+  --info-border: #c3ddf6;
+  --muted-bg: #eef1f5;
+  --overlay: rgba(16, 24, 40, 0.45);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.2);
+  color-scheme: light dark;
+}
+
+/* Dark theme: follows the operating system setting. Every pair of text and background
+   colour below meets WCAG AA (4.5:1); the PR for #53 lists the ratios. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1420;
+    --surface: #161e2c;
+    --border: #2b3749;
+    --text: #e6ebf2;
+    --muted: #a3aebf;
+    --primary: #2f6fd6;
+    --primary-dark: #2559b0;
+    --primary-light: #4f8ff0;
+    --on-primary: #ffffff;
+    --link: #79adff;
+    --ok: #5fd3a5;
+    --ok-bg: #123327;
+    --ok-border: #1f5a43;
+    --ok-text: #8fe6c2;
+    --warn: #f0b45a;
+    --warn-bg: #3a2a10;
+    --danger: #c93a31;
+    --danger-fg: #ff9b91;
+    --danger-bg: #3d1714;
+    --danger-border: #6b2a24;
+    --danger-text: #ffb4ab;
+    --info: #8cc0f5;
+    --info-bg: #13283f;
+    --info-border: #2a4a6e;
+    --muted-bg: #243043;
+    --overlay: rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Plain links use the browser's blue in the light theme, which is unreadable on dark. */
+  a:not([class]),
+  a:not([class]):visited {
+    color: var(--link);
+  }
 }
 
 * {
@@ -60,7 +114,7 @@ p { margin: 0.4rem 0; }
 .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; }
 .brand-mark {
   width: 18px; height: 18px; border-radius: 5px;
-  background: linear-gradient(135deg, var(--primary), #4b9bff);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
 }
 .nav { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-right: auto; }
 .nav-link {
@@ -99,9 +153,9 @@ p { margin: 0.4rem 0; }
 }
 .btn:hover:not(:disabled) { background: var(--bg); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
-.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-primary); }
 .btn-danger:hover:not(:disabled) { filter: brightness(0.93); }
 .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.82rem; }
 .btn-block { width: 100%; }
@@ -123,7 +177,7 @@ input:focus, textarea:focus, select:focus {
 input:disabled, textarea:disabled { background: var(--bg); color: var(--muted); }
 textarea { resize: vertical; }
 .hint { color: var(--muted); font-size: 0.8rem; }
-.field-error { color: var(--danger); font-size: 0.8rem; font-weight: 500; }
+.field-error { color: var(--danger-fg); font-size: 0.8rem; font-weight: 500; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 1rem; }
 
 .search-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -135,9 +189,9 @@ textarea { resize: vertical; }
   padding: 0.75rem 0.9rem; border-radius: var(--radius); margin-bottom: 0.85rem;
   border: 1px solid transparent; font-size: 0.9rem;
 }
-.banner-danger { background: var(--danger-bg); border-color: #f3c6c2; color: #7d1c17; }
-.banner-ok { background: var(--ok-bg); border-color: #b8e3d2; color: #0c5c43; }
-.banner-info { background: var(--info-bg); border-color: #c3ddf6; color: var(--info); }
+.banner-danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.banner-ok { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-text); }
+.banner-info { background: var(--info-bg); border-color: var(--info-border); color: var(--info); }
 .banner-code {
   margin-left: 0.5rem; font-family: ui-monospace, monospace; font-size: 0.75rem; opacity: 0.75;
 }
@@ -149,9 +203,9 @@ textarea { resize: vertical; }
 }
 .badge-ok { background: var(--ok-bg); color: var(--ok); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
-.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-danger { background: var(--danger-bg); color: var(--danger-fg); }
 .badge-info { background: var(--info-bg); color: var(--info); }
-.badge-muted { background: #eef1f5; color: var(--muted); }
+.badge-muted { background: var(--muted-bg); color: var(--muted); }
 
 /* ---- Lists & tables ---- */
 .list { list-style: none; margin: 0; padding: 0; }
@@ -194,7 +248,7 @@ textarea { resize: vertical; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 0.9rem; display: flex; flex-direction: column; gap: 0.15rem; box-shadow: var(--shadow);
 }
-.stat-danger { border-color: #f3c6c2; background: var(--danger-bg); }
+.stat-danger { border-color: var(--danger-border); background: var(--danger-bg); }
 .stat-value { font-size: 1.6rem; font-weight: 650; line-height: 1.1; }
 .stat-label { font-size: 0.82rem; color: var(--muted); }
 
@@ -218,7 +272,7 @@ textarea { resize: vertical; }
   background: var(--surface); cursor: pointer; font-size: 0.85rem; font-family: inherit;
 }
 .pill:hover { background: var(--bg); }
-.pill.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.pill.active { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
 
 /* ---- Steps ---- */
 .steps { list-style: none; display: flex; gap: 0.5rem; margin: 0; padding: 0; flex-wrap: wrap; }
@@ -226,8 +280,8 @@ textarea { resize: vertical; }
   padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.85rem;
   background: var(--surface); border: 1px solid var(--border); color: var(--muted);
 }
-.steps li.current { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-.steps li.complete { background: var(--ok-bg); border-color: #b8e3d2; color: var(--ok); }
+.steps li.current { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+.steps li.complete { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
 
 /* ---- Schedule / medications rows ---- */
 .day-row {
@@ -257,12 +311,12 @@ textarea { resize: vertical; }
 
 /* ---- Modal ---- */
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(16, 24, 40, 0.45);
+  position: fixed; inset: 0; background: var(--overlay);
   display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 50;
 }
 .modal {
   background: var(--surface); border-radius: var(--radius); padding: 1.25rem;
-  max-width: 440px; width: 100%; box-shadow: 0 12px 32px rgba(16, 24, 40, 0.2);
+  max-width: 440px; width: 100%; box-shadow: var(--shadow-lg);
 }
 .modal h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .modal-body { font-size: 0.9rem; color: var(--muted); }

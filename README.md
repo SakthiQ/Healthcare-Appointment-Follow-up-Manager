@@ -85,7 +85,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#71](../../issues/71): join a waitlist for a fully booked day
   - [#54](../../issues/54): add an appointment to any calendar (.ics download)
   - [#72](../../issues/72): use the app in Tamil or Hindi
-  - [#53](../../issues/53): a dark theme that follows the system setting
 - *For doctors:*
   - [#69](../../issues/69): see your own weekly hours and leave
   - [#68](../../issues/68): mark an appointment as a no-show
