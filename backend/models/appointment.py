@@ -55,6 +55,9 @@ class AppointmentStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
     CONFLICTED = "CONFLICTED"
     COMPLETED = "COMPLETED"
+    # The patient did not turn up. Not an active booking: like CANCELLED and COMPLETED it is
+    # outside _ACTIVE_STATUSES_SQL, so the slot rules and constraints ignore it.
+    NO_SHOW = "NO_SHOW"
 
 
 class Appointment(Base):

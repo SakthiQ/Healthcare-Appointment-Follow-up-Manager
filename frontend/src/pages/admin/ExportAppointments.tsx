@@ -4,7 +4,7 @@ import type { AppointmentStatus, Doctor } from '../../api/types';
 import { Card, ErrorBanner, Field } from '../../components/ui';
 import { saveTextFile } from '../../lib/download';
 
-const STATUSES: AppointmentStatus[] = ['CONFIRMED', 'RESCHEDULED', 'CONFLICTED', 'COMPLETED', 'CANCELLED', 'HELD'];
+const STATUSES: AppointmentStatus[] = ['CONFIRMED', 'RESCHEDULED', 'CONFLICTED', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'HELD'];
 
 function nextDay(date: string): string {
   const d = new Date(`${date}T00:00:00Z`);

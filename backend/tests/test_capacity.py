@@ -300,7 +300,7 @@ def test_admin_stats_counts_in_the_database_and_is_admin_only(client):
     assert after["active_doctors"] == before["active_doctors"] + 1
     assert after["appointments_total"] == before["appointments_total"] + 2
     by = after["appointments_by_status"]
-    assert set(by) == {"HELD", "CONFIRMED", "RESCHEDULED", "CANCELLED", "CONFLICTED", "COMPLETED"}
+    assert set(by) == {"HELD", "CONFIRMED", "RESCHEDULED", "CANCELLED", "CONFLICTED", "COMPLETED", "NO_SHOW"}
     assert by["CANCELLED"] == before["appointments_by_status"]["CANCELLED"] + 1
     assert by["CONFIRMED"] == before["appointments_by_status"]["CONFIRMED"] + 1
     assert sum(by.values()) == after["appointments_total"]

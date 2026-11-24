@@ -122,6 +122,7 @@ export function statusTone(status: AppointmentStatus): string {
     case 'RESCHEDULED':
       return 'info';
     case 'HELD':
+    case 'NO_SHOW':
       return 'warn';
     case 'CONFLICTED':
       return 'danger';
