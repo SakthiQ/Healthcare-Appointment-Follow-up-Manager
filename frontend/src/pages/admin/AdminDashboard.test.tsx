@@ -6,6 +6,7 @@ import type { AdminStats, Doctor } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { makeAuth, makeUser } from '../../test/helpers';
 import AdminDashboard from './AdminDashboard';
+import { expectNoA11yViolations } from '../../test/a11y';
 
 vi.mock('../../auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../auth/AuthContext')>()),
@@ -73,5 +74,15 @@ describe('AdminDashboard', () => {
 
     expect(await screen.findByText('5')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminDashboard: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.spyOn(api, 'searchDoctors').mockResolvedValue([doctor()]);
+    vi.spyOn(api, 'getAdminStats').mockResolvedValue(stats());
+    renderDashboard();
+    await screen.findByText('2481');
+    await expectNoA11yViolations(document.body);
   });
 });

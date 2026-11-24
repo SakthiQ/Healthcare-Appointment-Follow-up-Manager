@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
 import ForgotPassword from './ForgotPassword';
+import { expectNoA11yViolations } from '../test/a11y';
 
 const SENT = 'If that address belongs to an account, we have sent it an email with a link.';
 
@@ -56,5 +57,12 @@ describe('ForgotPassword', () => {
   it('links back to sign in', () => {
     renderPage();
     expect(screen.getByRole('link', { name: 'Back to sign in' })).toHaveAttribute('href', '/login');
+  });
+});
+
+describe('ForgotPassword: accessibility', () => {
+  it('has no axe violations', async () => {
+    renderPage();
+    await expectNoA11yViolations(document.body);
   });
 });

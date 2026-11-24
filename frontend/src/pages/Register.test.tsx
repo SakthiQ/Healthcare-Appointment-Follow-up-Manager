@@ -6,6 +6,7 @@ import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { makeAuth, makeUser } from '../test/helpers';
 import Register from './Register';
+import { expectNoA11yViolations } from '../test/a11y';
 
 vi.mock('../auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/AuthContext')>()),
@@ -116,5 +117,12 @@ describe('Register', () => {
 
     expect(await screen.findByText(/already exists/i)).toBeInTheDocument();
     expect(auth.login).not.toHaveBeenCalled();
+  });
+});
+
+describe('Register: accessibility', () => {
+  it('has no axe violations', async () => {
+    renderPage();
+    await expectNoA11yViolations(document.body);
   });
 });

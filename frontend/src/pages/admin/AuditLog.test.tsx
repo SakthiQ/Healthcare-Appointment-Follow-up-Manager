@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../../api/client';
 import type { AuditLogEntry, AuditLogPage } from '../../api/types';
 import AuditLog from './AuditLog';
+import { expectNoA11yViolations } from '../../test/a11y';
 
 function entry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
   return {
@@ -112,5 +113,14 @@ describe('AuditLog', () => {
 
     expect(await screen.findByText('appointment.view')).toBeInTheDocument();
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('AuditLog: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.spyOn(api, 'listAuditLogs').mockResolvedValue(page([entry()]));
+    render(<AuditLog />);
+    await screen.findByText('appointment.view');
+    await expectNoA11yViolations(document.body);
   });
 });

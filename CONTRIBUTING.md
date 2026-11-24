@@ -65,6 +65,8 @@ should never put your own in a committed file.
 2. **Keep the change focused** on the issue. Unrelated fixes belong in their own issue.
 3. **Add or update tests.** Bug fixes need a test that fails without the fix; new behaviour needs
    tests that describe it.
+   A new page test should also check accessibility: once the page has loaded, call
+   `await expectNoA11yViolations(document.body)` from `frontend/src/test/a11y.ts`.
 4. **Run the checks locally** before pushing. CI runs the same ones:
    ```bash
    cd backend  && ruff check . && python -m pytest -q
