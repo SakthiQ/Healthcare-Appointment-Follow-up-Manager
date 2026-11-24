@@ -8,6 +8,7 @@ from models.user import User, UserRole
 from models.appointment import AppointmentStatus
 from services.appointment_service import appointment_service
 from services.audit_service import audit_service
+from services.ics_service import build_appointment_ics
 from schemas.appointment import (
     AppointmentCreateRequest,
     AppointmentRescheduleRequest,
@@ -67,6 +68,23 @@ def get_appointment(
     result = appointment_service.get_appointment(db, appointment_id=appointment_id, user=current_user)
     audit_service.record_appointment_access(db, "appointment.view", current_user, appointment_id)
     return result
+
+
+@router.get("/{appointment_id}/calendar.ics", response_class=Response, status_code=status.HTTP_200_OK)
+def get_appointment_calendar(
+    appointment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """The appointment as an iCalendar file, for Apple Calendar, Outlook and others. Same
+    access rule as GET /appointments/{id}: the patient, the doctor or an admin."""
+    appt = appointment_service.get_appointment(db, appointment_id=appointment_id, user=current_user)
+    audit_service.record_appointment_access(db, "appointment.calendar_download", current_user, appointment_id)
+    return Response(
+        content=build_appointment_ics(appt, current_user.role),
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="appointment-{appointment_id}.ics"'},
+    )
 
 
 @router.post("/{appointment_id}/reschedule", response_model=AppointmentResponse, status_code=status.HTTP_200_OK)

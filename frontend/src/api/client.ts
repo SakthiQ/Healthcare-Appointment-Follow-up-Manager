@@ -115,10 +115,14 @@ function sleep(ms: number): Promise<void> {
  *  request reaches any endpoint, so nothing was done and it is safe to send again, for
  *  POSTs as well as GETs. Those responses are retried up to BUSY_RETRIES times, so a short
  *  spike shows up as a slower page instead of an error. Any other 503 is not retried. */
-async function send<T>(path: string, options: RequestInit = {}): Promise<{ body: T; headers: Headers }> {
+async function send<T>(
+  path: string,
+  options: RequestInit = {},
+  as: 'json' | 'text' = 'json',
+): Promise<{ body: T; headers: Headers }> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await sendOnce<T>(path, options);
+      return await sendOnce<T>(path, options, as);
     } catch (error) {
       const busy = error instanceof BusyError;
       if (!busy) throw error;
@@ -138,7 +142,11 @@ class BusyError extends Error {
   }
 }
 
-async function sendOnce<T>(path: string, options: RequestInit): Promise<{ body: T; headers: Headers }> {
+async function sendOnce<T>(
+  path: string,
+  options: RequestInit,
+  as: 'json' | 'text' = 'json',
+): Promise<{ body: T; headers: Headers }> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> | undefined),
   };
@@ -171,6 +179,8 @@ async function sendOnce<T>(path: string, options: RequestInit): Promise<{ body: 
   if (response.status === 204) return { body: undefined as T, headers: response.headers };
 
   const text = await response.text();
+  // A successful non-JSON download (such as an .ics file) is returned as text; errors stay JSON.
+  if (response.ok && as === 'text') return { body: text as T, headers: response.headers };
   let body: unknown = null;
   if (text) {
     try {
@@ -337,6 +347,10 @@ export const api = {
 
   rescheduleAppointment: (id: string, data: { new_start_time: string; new_end_time: string }) =>
     post<Appointment>(`/appointments/${id}/reschedule`, data),
+
+  /** The appointment as an iCalendar (.ics) file, for Apple Calendar, Outlook and others. */
+  getAppointmentCalendar: async (id: string): Promise<string> =>
+    (await send<string>(`/appointments/${id}/calendar.ics`, {}, 'text')).body,
 
   cancelAppointment: (id: string, reason?: string) =>
     post<Appointment>(`/appointments/${id}/cancel`, { cancellation_reason: reason ?? null }),
