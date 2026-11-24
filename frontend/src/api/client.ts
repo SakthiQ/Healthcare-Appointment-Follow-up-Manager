@@ -24,6 +24,8 @@ import type {
   WorkingHours,
   WorkingHoursInput,
   HistoryItem,
+  PatientProfile,
+  PatientHealth,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -362,6 +364,11 @@ export const api = {
     const total = Number(headers.get('X-Total-Count'));
     return { items: body, total: Number.isFinite(total) && total >= body.length ? total : body.length };
   },
+
+  getMyProfile: () => get<PatientProfile>('/patients/me/profile'),
+  updateMyProfile: (profile: PatientProfile) => put<PatientProfile>('/patients/me/profile', profile),
+  /** The patient's age and allergies, for the appointment's doctor or an admin (audited). */
+  getPatientHealth: (appointmentId: string) => get<PatientHealth>(`/appointments/${appointmentId}/patient-health`),
 
   getAppointment: (id: string) => get<Appointment>(`/appointments/${id}`),
 
