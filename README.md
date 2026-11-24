@@ -95,7 +95,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#65](../../issues/65): a page to retry failed emails and calendar syncs
   - [#57](../../issues/57): CSV export of appointments
   - [#52](../../issues/52): clearer appointment emails with names, links and HTML
-  - [#37](../../issues/37): an optional retention period for the audit log
 - *Frontend tests:*
   - [#35](../../issues/35): the booking page *(good first issue)*
   - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
@@ -451,9 +450,10 @@ Each limitation comes with the reason for it, and some link to the open issue th
 - **SQLite tests can't prove multi-connection safety.** SQLite runs everything one at a time
   in-process. The real proof is `backend/scripts/verify_postgres.py`, which CI runs against
   PostgreSQL.
-- **The audit log has no retention period.** Audit writes are best-effort: a failed write is
+- **The audit log is kept forever by default.** Audit writes are best-effort: a failed write is
   logged and the request carries on, so a problem with the audit table can't take patient care
-  offline. Entries are never edited or deleted. → [#37](../../issues/37)
+  offline. Entries are never edited. Set `AUDIT_LOG_RETENTION_DAYS` (30 or more) to have the
+  maintenance worker delete older entries; see [docs/deployment.md](docs/deployment.md).
 - **Email verification is off by default** (`REQUIRE_EMAIL_VERIFICATION=False`) so the
   demo flow works. Real password-reset and verification emails need real SMTP.
 - **The booking and consultation pages have no component tests.** They were checked by hand

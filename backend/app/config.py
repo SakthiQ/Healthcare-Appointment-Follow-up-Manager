@@ -11,6 +11,8 @@ except ImportError:
 # The well-known development signing key. Anyone can read it in the repo, so a
 # production deployment that still uses it lets anyone forge any user's token.
 DEFAULT_SECRET_KEY = "dev-secret-key-change-in-production"
+# The shortest audit log retention accepted, so a typo such as "3" cannot wipe the log.
+AUDIT_LOG_RETENTION_MIN_DAYS = 30
 
 
 class Settings(BaseSettings):
@@ -190,6 +192,25 @@ class Settings(BaseSettings):
     # Optional regex for origins that can't be listed up front, such as Vercel
     # preview deployments (a new URL per branch). Empty disables it.
     CORS_ALLOWED_ORIGIN_REGEX: Optional[str] = None
+
+    # Days to keep audit log entries. Unset (the default) keeps them forever. When set, the
+    # maintenance worker deletes older entries in batches. Many healthcare regulations
+    # require keeping access logs for years, so choose this with your compliance team.
+    AUDIT_LOG_RETENTION_DAYS: Optional[int] = None
+
+    @field_validator("AUDIT_LOG_RETENTION_DAYS", mode="before")
+    @classmethod
+    def _audit_retention_floor(cls, value):
+        # An empty env var means unset. Below the floor is almost certainly a typo that
+        # would quietly wipe the log, so refuse to start instead.
+        if isinstance(value, str) and not value.strip():
+            return None
+        if value is not None and int(value) < AUDIT_LOG_RETENTION_MIN_DAYS:
+            raise ValueError(
+                f"AUDIT_LOG_RETENTION_DAYS must be at least {AUDIT_LOG_RETENTION_MIN_DAYS} days "
+                f"(got {value}). Leave it unset to keep the audit log forever."
+            )
+        return value
 
     @field_validator("DATABASE_URL")
     @classmethod

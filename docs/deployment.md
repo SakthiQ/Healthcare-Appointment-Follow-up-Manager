@@ -335,6 +335,17 @@ was partly limited by the load generator, a single Python process on the same ma
 from another machine to find the server's own ceiling. A 0.1-CPU free instance manages about a
 tenth of these figures.
 
+## Audit log retention
+
+The audit log records who looked at or changed which patient's data. By default nothing ever
+deletes it. To keep it for a fixed period, set `AUDIT_LOG_RETENTION_DAYS`, for example `2555`
+for seven years. The maintenance worker then deletes older entries in batches of 1,000, and its
+log line reports how many (`audit_logs` in the purge counts).
+
+- Values under 30 are refused at startup, so a typo such as `3` cannot wipe the log.
+- **Check your legal requirements first.** Many healthcare regulations require keeping access
+  logs for several years, and deleted entries cannot be recovered.
+
 ## Reproducible installs and CI
 
 - Install the backend with `pip install -r requirements.txt -c constraints.txt` (the Render build command does). `constraints.txt` pins every package to the version CI tests. To update the pins, run `python scripts/refresh_constraints.py` (use the same Python minor version as `PYTHON_VERSION` in `render.yaml`), run the tests, review the diff and commit. `python scripts/check_constraints.py` fails if anything installed is unpinned or has drifted. `uvloop` is Linux-only, so it is pinned in `constraints-extras.txt`; if CI reports an unpinned package, add it there.

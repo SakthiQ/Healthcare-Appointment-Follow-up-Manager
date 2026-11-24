@@ -40,5 +40,17 @@ class AuditRepository:
         rows = q.order_by(AuditLog.occurred_at.desc(), AuditLog.id.desc()).offset(offset).limit(limit).all()
         return rows, total
 
+    def purge_older_than(self, db: Session, cutoff: datetime, batch_size: int = 1000) -> int:
+        """Delete entries that occurred before `cutoff`, `batch_size` at a time with a commit
+        after each batch, so a large first run never holds one huge transaction."""
+        total = 0
+        while True:
+            ids = [row.id for row in db.query(AuditLog.id).filter(AuditLog.occurred_at < cutoff)
+                   .order_by(AuditLog.occurred_at).limit(batch_size).all()]
+            if not ids:
+                return total
+            total += db.query(AuditLog).filter(AuditLog.id.in_(ids)).delete(synchronize_session=False)
+            db.commit()
+
 
 audit_repository = AuditRepository()
