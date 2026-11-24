@@ -17,6 +17,7 @@ import DoctorSearch from './pages/patient/DoctorSearch';
 import BookAppointment from './pages/patient/BookAppointment';
 import PatientAppointments from './pages/patient/PatientAppointments';
 import PatientAppointmentDetail from './pages/patient/PatientAppointmentDetail';
+import PatientHistory from './pages/patient/PatientHistory';
 
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import DoctorAppointments from './pages/doctor/DoctorAppointments';
@@ -90,6 +91,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['PATIENT']}>
                 <PatientAppointments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/history"
+            element={
+              <ProtectedRoute roles={['PATIENT']}>
+                <PatientHistory />
               </ProtectedRoute>
             }
           />

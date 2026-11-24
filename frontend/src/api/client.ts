@@ -23,6 +23,7 @@ import type {
   UserRole,
   WorkingHours,
   WorkingHoursInput,
+  HistoryItem,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -351,6 +352,13 @@ export const api = {
     params: AppointmentListParams & { limit: number; offset: number },
   ): Promise<AppointmentPage> => {
     const { body, headers } = await send<Appointment[]>(appointmentQuery(params));
+    const total = Number(headers.get('X-Total-Count'));
+    return { items: body, total: Number.isFinite(total) && total >= body.length ? total : body.length };
+  },
+
+  /** The signed-in patient's completed visits, newest first (patients only; audited). */
+  getMyHistory: async ({ limit, offset }: { limit: number; offset: number }): Promise<{ items: HistoryItem[]; total: number }> => {
+    const { body, headers } = await send<HistoryItem[]>(`/patients/me/history?limit=${limit}&offset=${offset}`);
     const total = Number(headers.get('X-Total-Count'));
     return { items: body, total: Number.isFinite(total) && total >= body.length ? total : body.length };
   },
