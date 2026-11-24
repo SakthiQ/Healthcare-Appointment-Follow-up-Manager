@@ -1,0 +1,16 @@
+# Ruff lints the backend in CI (`ruff check .`). Formatting is not enforced.
+target-version = "py312"
+
+[lint]
+# Ruff's defaults: syntax and import errors, plus Pyflakes (unused or undefined names).
+select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# Generated migration files keep their template imports; history is not edited for lint.
+"alembic/versions/*" = ["F401"]
+# Sets DATABASE_URL and other env vars before importing the app, on purpose.
+"scripts/verify_postgres.py" = ["E402"]
+# These import the `isolated_client` fixture and request it by name, which pytest needs and
+# Pyflakes reads as a redefinition.
+"tests/test_hardening.py" = ["F811"]
+"tests/test_invitations.py" = ["F811"]

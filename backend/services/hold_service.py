@@ -2,11 +2,10 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.exceptions import NotFoundError, ConflictError, ValidationError, ForbiddenError
-from repositories.doctor_repository import doctor_repository
 from repositories.hold_repository import hold_repository
 from services.slot_service import slot_service
 from schemas.slot import HoldCreateRequest, HoldResponse
-from models.appointment import AppointmentHold, AppointmentStatus
+from models.appointment import AppointmentHold
 from models.user import User, UserRole
 
 

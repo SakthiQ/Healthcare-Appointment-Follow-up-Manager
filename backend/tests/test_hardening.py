@@ -365,7 +365,7 @@ def test_losing_a_consultation_race_is_a_409(isolated_client, monkeypatch):
 
     admin, doctor, patient, start, end = _bookable_slot(isolated_client, "consrace")
     appt = _book(isolated_client, doctor, patient, start, end)
-    doctor_headers = _register_login(isolated_client, f"doc_consrace@example.com")
+    doctor_headers = _register_login(isolated_client, "doc_consrace@example.com")
     body = {"notes": "Routine check.", "prescription_instructions": None, "medications": []}
     url = f"/api/v1/appointments/{appt['id']}/consultation"
     assert isolated_client.post(url, json=body, headers=doctor_headers).status_code == 201

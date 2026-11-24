@@ -1,7 +1,7 @@
 from typing import Optional, List
 from datetime import date
 from sqlalchemy.orm import Session, contains_eager
-from models.user import User, UserRole
+from models.user import User
 from models.doctor import Doctor, DoctorWorkingHours, DoctorLeave
 
 

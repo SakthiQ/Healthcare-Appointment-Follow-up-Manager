@@ -1,10 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta, timezone
-from fastapi.testclient import TestClient
 from app.main import app
 from app.database import get_db
 from tests.conftest import TestingSessionLocal
-import pytest
 import threading
 
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from models.appointment import Appointment
-from models.calendar import CalendarEvent, CalendarOperation, CalendarSyncStatus
+from models.calendar import CalendarEvent, CalendarOperation
 from repositories.calendar_repository import calendar_repository
 from repositories.appointment_repository import appointment_repository
 from repositories.user_repository import user_repository

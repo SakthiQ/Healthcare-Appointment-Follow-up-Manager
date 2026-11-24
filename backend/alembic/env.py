@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.config import settings
 from app.database import Base
-import models  # Ensures all models are registered with Base.metadata
+import models  # noqa: F401  registers every model on Base.metadata so autogenerate sees all tables
 
 
 config = context.config

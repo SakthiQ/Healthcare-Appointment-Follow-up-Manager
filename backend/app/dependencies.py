@@ -1,4 +1,4 @@
-from typing import List, Callable, Optional
+from typing import Optional
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session

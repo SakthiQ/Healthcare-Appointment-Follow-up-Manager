@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.core.security import hash_password
-from app.exceptions import NotFoundError, ConflictError, ValidationError
+from app.exceptions import NotFoundError, ConflictError
 from repositories.appointment_repository import appointment_repository
 from repositories.user_repository import user_repository
 from repositories.doctor_repository import doctor_repository
@@ -12,7 +12,7 @@ from services.calendar_service import calendar_service
 from services.notification_service import notification_service
 from models.appointment import AppointmentStatus
 from models.notification import NotificationType
-from models.user import UserRole, User
+from models.user import UserRole
 from models.doctor import Doctor
 
 logger = logging.getLogger(__name__)

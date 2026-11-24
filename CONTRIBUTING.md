@@ -67,7 +67,7 @@ should never put your own in a committed file.
    tests that describe it.
 4. **Run the checks locally** before pushing. CI runs the same ones:
    ```bash
-   cd backend  && python -m pytest -q
+   cd backend  && ruff check . && python -m pytest -q
    cd frontend && npm run typecheck && npm test && npm run build
    ```
 5. **Update the docs** (README, `docs/`, `.env.example`) when you add a setting or change behaviour.

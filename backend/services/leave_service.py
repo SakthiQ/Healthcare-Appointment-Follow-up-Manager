@@ -18,7 +18,7 @@ class LeaveService:
             raise NotFoundError("Doctor not found.")
 
         leaves = doctor_repository.get_leaves(db, doctor_id)
-        return [DoctorLeaveResponse.model_validate(l) for l in leaves]
+        return [DoctorLeaveResponse.model_validate(leave) for leave in leaves]
 
     def delete_leave(self, db: Session, doctor_id: str, leave_id: str):
         doctor = doctor_repository.get_by_id(db, doctor_id)

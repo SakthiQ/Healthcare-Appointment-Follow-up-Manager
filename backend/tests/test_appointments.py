@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta, timezone
-import pytest
 from models.appointment import AppointmentStatus
 
 

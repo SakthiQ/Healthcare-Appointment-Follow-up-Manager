@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.exceptions import NotFoundError, ConflictError, ValidationError, ForbiddenError
 from app.core.datetime_utils import ensure_utc
 from models.user import User, UserRole
-from models.appointment import Appointment, AppointmentStatus, AppointmentHold
+from models.appointment import Appointment, AppointmentStatus
 from models.notification import NotificationType
 from repositories.appointment_repository import appointment_repository
 from repositories.doctor_repository import doctor_repository

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import List
 from sqlalchemy.orm import Session
 from app.exceptions import NotFoundError

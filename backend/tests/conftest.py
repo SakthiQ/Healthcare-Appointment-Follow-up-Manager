@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Ensure backend root is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -25,7 +26,6 @@ settings.RATE_LIMITING_ENABLED = False
 # its own tests, which switch it back on with monkeypatch.
 settings.MAX_CONCURRENT_REQUESTS = 0
 
-from sqlalchemy.pool import StaticPool
 
 # Use in-memory SQLite for testing
 TEST_DATABASE_URL = "sqlite:///:memory:"
