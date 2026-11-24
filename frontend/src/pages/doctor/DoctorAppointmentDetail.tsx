@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, nullIfNotFound } from '../../api/client';
 import type { MedicationItem, PostVisitPayload, PreVisitPayload } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
+import { AddToCalendarButton } from '../../components/AddToCalendarButton';
 import { formatDateTime, urgencyTone } from '../../lib/format';
 import {
   Badge,
@@ -142,9 +143,12 @@ export default function DoctorAppointmentDetail() {
           <h1>Consultation</h1>
           <p className="muted">{formatDateTime(appt.start_time, appt.doctor_timezone)}</p>
         </div>
-        <Link className="btn" to="/doctor/appointments">
-          Back
-        </Link>
+        <div className="row-actions">
+          <AddToCalendarButton appointmentId={appt.id} />
+          <Link className="btn" to="/doctor/appointments">
+            Back
+          </Link>
+        </div>
       </header>
 
       {notice ? <SuccessBanner>{notice}</SuccessBanner> : null}

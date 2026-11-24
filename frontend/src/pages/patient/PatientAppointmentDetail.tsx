@@ -4,6 +4,7 @@ import { api, nullIfNotFound } from '../../api/client';
 import type { PostVisitPayload, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { useNow } from '../../lib/useNow';
+import { AddToCalendarButton } from '../../components/AddToCalendarButton';
 import { bookableSlots, formatDateTime, formatTime, todayInputValue, urgencyTone } from '../../lib/format';
 import {
   Badge,
@@ -213,6 +214,7 @@ export default function PatientAppointmentDetail() {
               Cancel appointment
             </button>
           ) : null}
+          <AddToCalendarButton appointmentId={appt.id} />
         </div>
       </Card>
 
