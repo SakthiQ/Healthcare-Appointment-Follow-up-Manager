@@ -223,6 +223,15 @@ export interface AppointmentListParams {
 }
 
 /** One page of appointments and how many match in total (the API's X-Total-Count header). */
+/** Filters for the admin CSV export (GET /admin/appointments/export.csv). */
+export interface AppointmentExportFilters {
+  status?: string;
+  doctor_id?: string;
+  /** ISO timestamps: appointments starting at or after `from` and before `until`. */
+  from?: string;
+  until?: string;
+}
+
 export interface AppointmentPage {
   items: Appointment[];
   total: number;
@@ -347,6 +356,14 @@ export const api = {
 
   rescheduleAppointment: (id: string, data: { new_start_time: string; new_end_time: string }) =>
     post<Appointment>(`/appointments/${id}/reschedule`, data),
+
+  /** Appointments as CSV text for a spreadsheet (admin only; audited, capped at 10,000 rows). */
+  exportAppointmentsCsv: async (filters: AppointmentExportFilters = {}): Promise<string> => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+    const query = params.toString();
+    return (await send<string>(`/admin/appointments/export.csv${query ? `?${query}` : ''}`, {}, 'text')).body;
+  },
 
   /** The appointment as an iCalendar (.ics) file, for Apple Calendar, Outlook and others. */
   getAppointmentCalendar: async (id: string): Promise<string> =>

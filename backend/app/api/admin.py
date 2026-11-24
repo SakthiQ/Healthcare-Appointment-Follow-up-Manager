@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Response, status, Query
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from repositories.appointment_repository import appointment_repository
 from repositories.doctor_repository import doctor_repository
 from schemas.admin import AdminStatsResponse, FailedJobKind, FailedJobResponse
 from services.audit_service import audit_service
+from services.export_service import export_appointments_csv
 from services.doctor_service import doctor_service
 from services.invitation_service import invitation_service
 from services.job_retry_service import job_retry_service
@@ -273,3 +274,33 @@ def retry_calendar_event(
         detail={"type": result.type, "appointment_id": result.appointment_id},
     )
     return result
+
+
+@router.get("/appointments/export.csv", response_class=Response, status_code=status.HTTP_200_OK)
+def export_appointments(
+    doctor_id: Optional[str] = Query(default=None, description="Doctor profile ID (or the doctor's user ID)"),
+    status_filter: Optional[AppointmentStatus] = Query(default=None, alias="status"),
+    from_time: Optional[datetime] = Query(default=None, alias="from", description="Start at or after (ISO 8601)"),
+    until_time: Optional[datetime] = Query(default=None, alias="until", description="Start before (ISO 8601)"),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Appointments as CSV for spreadsheets: scheduling data only, no clinical content. Capped
+    at 10,000 rows (400 above that). Every export is audited with its filters and row count."""
+    csv_text, rows = export_appointments_csv(
+        db, doctor_id=doctor_id, status_filter=status_filter, from_time=from_time, until_time=until_time,
+    )
+    filters = {k: v for k, v in {
+        "doctor_id": doctor_id,
+        "status": status_filter.value if status_filter else None,
+        "from": from_time.isoformat() if from_time else None,
+        "until": until_time.isoformat() if until_time else None,
+    }.items() if v}
+    audit_service.record(db, "admin.appointments.export", actor=current_user, resource_type="appointment",
+                         detail={"filters": filters, "rows": rows})
+    filename = f"appointments-{datetime.now(timezone.utc):%Y-%m-%d}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

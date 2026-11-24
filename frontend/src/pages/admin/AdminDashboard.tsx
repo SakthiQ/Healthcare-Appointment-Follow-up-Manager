@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useAsync } from '../../lib/useAsync';
 import { Card, ErrorBanner, Spinner } from '../../components/ui';
+import ExportAppointments from './ExportAppointments';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -92,6 +93,8 @@ export default function AdminDashboard() {
               </ul>
             )}
           </Card>
+
+          <ExportAppointments doctors={doctorsQuery.data ?? []} />
         </>
       ) : null}
     </div>

@@ -92,7 +92,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
 - *For admins and the hospital:*
   - [#70](../../issues/70): group doctors into departments
   - [#65](../../issues/65): a page to retry failed emails and calendar syncs
-  - [#57](../../issues/57): CSV export of appointments
   - [#52](../../issues/52): clearer appointment emails with names, links and HTML
 - *Frontend tests:*
   - [#35](../../issues/35): the booking page *(good first issue)*
@@ -342,7 +341,7 @@ summary:
 | Slots & holds | `/api/v1/slots` | create/get/release a hold |
 | Appointments | `/api/v1/appointments` | book, list, get, reschedule, cancel |
 | AI & clinical | `/api/v1/appointments/{id}/...` | symptom-report, consultation, pre/post-visit AI summaries |
-| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, staff invitations (`/admin/invitations`), audit log (`GET /admin/audit-logs`), failed email and calendar jobs (`GET /admin/failed-jobs`, `POST .../retry`) |
+| Admin | `/api/v1/admin` | doctor CRUD, working hours, leave, staff invitations (`/admin/invitations`), audit log (`GET /admin/audit-logs`), failed email and calendar jobs (`GET /admin/failed-jobs`, `POST .../retry`), appointments as CSV (`GET /admin/appointments/export.csv`, audited) |
 
 ### Database schema
 
