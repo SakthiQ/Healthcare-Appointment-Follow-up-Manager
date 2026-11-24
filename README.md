@@ -100,8 +100,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#35](../../issues/35): the booking page *(good first issue)*
   - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
   - [#42](../../issues/42): the patient's doctor search and dashboard *(good first issue)*
-  - [#43](../../issues/43): the patient's appointment detail page
-  - [#44](../../issues/44): the doctor's appointment lists and the admin conflicts page *(good first issue)*
   - [#45](../../issues/45): the admin doctor management and doctor settings pages
 - *Code quality:*
   - [#47](../../issues/47): ESLint for the frontend
