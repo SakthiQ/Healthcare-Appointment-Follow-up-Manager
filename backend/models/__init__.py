@@ -17,9 +17,11 @@ from models.calendar import CalendarEvent, CalendarSyncStatus, CalendarOperation
 from models.security import LoginThrottle, RateLimit, AuthToken, AuthTokenPurpose
 from models.audit import AuditLog
 from models.invitation import Invitation
+from models.patient_profile import PatientProfile
 
 __all__ = [
     "Base",
+    "PatientProfile",
     "User",
     "UserRole",
     "Doctor",

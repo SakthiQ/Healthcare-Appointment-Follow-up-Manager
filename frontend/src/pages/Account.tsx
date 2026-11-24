@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Badge, Card, ErrorBanner, Field, InfoBanner, SuccessBanner } from '../components/ui';
+import { HealthDetails } from '../components/HealthDetails';
 import { validateNewPassword } from '../lib/password';
 
 export default function Account() {
@@ -104,6 +105,8 @@ export default function Account() {
           </>
         ) : null}
       </Card>
+
+      {user?.role === 'PATIENT' ? <HealthDetails /> : null}
 
       <Card title="Change password">
         <ErrorBanner error={error} />

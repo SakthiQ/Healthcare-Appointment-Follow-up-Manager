@@ -264,3 +264,17 @@ export interface HistoryItem {
   instructions: string | null;
   follow_up_steps: string | null;
 }
+
+/** The patient's own health details (GET/PUT /patients/me/profile). */
+export interface PatientProfile {
+  date_of_birth: string | null;
+  phone: string | null;
+  allergies: string | null;
+  updated_at?: string | null;
+}
+
+/** What an appointment's doctor sees: the age, never the date of birth. */
+export interface PatientHealth {
+  age: number | null;
+  allergies: string | null;
+}

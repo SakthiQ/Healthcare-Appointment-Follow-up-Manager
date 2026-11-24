@@ -4,6 +4,7 @@ import { api, nullIfNotFound } from '../../api/client';
 import type { MedicationItem, PostVisitPayload, PreVisitPayload } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { AddToCalendarButton } from '../../components/AddToCalendarButton';
+import { PatientHealthCard } from '../../components/PatientHealthCard';
 import { formatDateTime, urgencyTone } from '../../lib/format';
 import {
   Badge,
@@ -175,6 +176,8 @@ export default function DoctorAppointmentDetail() {
       {notice ? <SuccessBanner>{notice}</SuccessBanner> : null}
 
       <ErrorBanner error={noShowError} />
+
+      <PatientHealthCard appointmentId={appt.id} />
 
       <Card title="Appointment">
         <div className="summary-row">
