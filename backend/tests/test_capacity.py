@@ -7,7 +7,6 @@ import time as walltime
 from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 
-import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 

@@ -1,7 +1,6 @@
-import os
 import re
 from typing import Optional
-from pydantic import Field, field_validator, model_validator
+from pydantic import field_validator, model_validator
 try:
     from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:

@@ -101,7 +101,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#42](../../issues/42): the patient's doctor search and dashboard *(good first issue)*
 - *Code quality:*
   - [#47](../../issues/47): ESLint for the frontend
-  - [#48](../../issues/48): Ruff for the backend
   - [#56](../../issues/56): automated accessibility checks (axe) in the frontend tests
 - *Docs and setup:*
   - [#49](../../issues/49): check the local setup guide on macOS and Linux *(good first issue)*

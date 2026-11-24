@@ -155,6 +155,7 @@ Backend (with the virtual environment active):
 
 ```bash
 cd backend
+ruff check .        # lint: unused imports, undefined names
 python -m pytest -q
 ```
 

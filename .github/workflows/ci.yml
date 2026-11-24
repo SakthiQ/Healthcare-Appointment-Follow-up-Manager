@@ -41,6 +41,9 @@ jobs:
       - name: No broken requirements
         run: pip check
 
+      - name: Lint (ruff)
+        run: ruff check .
+
       - name: Run the tests
         run: python -m pytest -q
 

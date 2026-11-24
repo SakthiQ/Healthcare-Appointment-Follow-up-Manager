@@ -8,6 +8,8 @@ python-dotenv>=1.0.0,<2.0.0
 psycopg2-binary>=2.9.0,<3.0.0
 pytest>=7.0.0,<10.0.0
 httpx>=0.24.0,<1.0.0
+# Linter run in CI (`ruff check .`). Ruff's 0.x minor releases change rules, so stay on 0.17.
+ruff>=0.17.0,<0.18.0
 pyjwt>=2.8.0,<3.0.0
 bcrypt>=5.0.0,<6.0.0
 email-validator>=2.4.0,<3.0.0

@@ -16,7 +16,12 @@ If the server has the `btree_gist` extension (Neon, Supabase and Render Postgres
 real migration is applied and the per-doctor exclusion constraint is checked in full;
 otherwise a variant without the doctor-equality column is used and that is reported.
 """
-import os, secrets, subprocess, sys, threading, time
+import os
+import secrets
+import subprocess
+import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time as dtime, timedelta, timezone
 

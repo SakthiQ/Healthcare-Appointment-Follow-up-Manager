@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta, timezone
-import pytest
 
 
 def get_admin_headers(client):

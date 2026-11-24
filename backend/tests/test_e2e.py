@@ -10,7 +10,7 @@ These tests deliberately go through the API rather than calling services
 directly — that is what makes them integration tests and what proves no
 module bypasses the service/business layer.
 """
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 

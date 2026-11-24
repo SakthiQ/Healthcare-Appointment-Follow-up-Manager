@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta, timezone
 import pytest
-from app.exceptions import ForbiddenError, ValidationError, ConflictError
+from app.exceptions import ForbiddenError, ValidationError
 from services.hold_service import hold_service
 from schemas.slot import HoldCreateRequest
 

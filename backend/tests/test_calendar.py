@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
 
 from app.core.datetime_utils import ensure_utc
 from models.calendar import CalendarEvent, CalendarOperation, CalendarSyncStatus
@@ -526,7 +525,6 @@ def _google_provider_answering(monkeypatch, status_code):
 def test_google_delete_of_already_deleted_event_counts_as_not_found(monkeypatch):
     """Google answers 410 Gone here. CalendarService treats not-found on delete as
     success, so a repeated delete must not end the row in FAILED."""
-    from providers.calendar_provider import CalendarEventNotFoundError
 
     provider = _google_provider_answering(monkeypatch, 410)
     try:

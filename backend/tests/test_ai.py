@@ -1,8 +1,6 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict
 
-from app.database import get_db
-from app.main import app
 from models.clinical import AISummaryStatus, AISummaryType
 from providers.ai_provider import (
     AIProvider,

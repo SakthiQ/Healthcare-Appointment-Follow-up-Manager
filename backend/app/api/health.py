@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
-from app.config import settings, Settings
+from app.config import Settings
 from app.database import check_db_connection
 from app.dependencies import get_settings
 

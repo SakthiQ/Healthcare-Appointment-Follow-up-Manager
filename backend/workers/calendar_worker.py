@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 
-from models.calendar import CalendarSyncStatus, CalendarOperation
+from models.calendar import CalendarSyncStatus
 from repositories.calendar_repository import calendar_repository
 from services.calendar_service import calendar_service
 from workers.runner import batch_was_full

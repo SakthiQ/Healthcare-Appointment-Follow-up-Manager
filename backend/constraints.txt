@@ -34,6 +34,7 @@ PyJWT==2.15.1
 pytest==9.2.0
 python-dotenv==1.2.4
 PyYAML==6.0.3
+ruff==0.17.6
 SQLAlchemy==2.1.9
 starlette==1.10.0
 typing-inspection==0.4.5

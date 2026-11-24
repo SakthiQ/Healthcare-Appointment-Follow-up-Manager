@@ -10,7 +10,7 @@ from models.audit import AuditLog
 from models.doctor import Doctor
 from models.invitation import Invitation
 from models.notification import NotificationJob, NotificationStatus, NotificationType
-from models.user import User, UserRole
+from models.user import User
 from tests.test_design_guarantees import _register, isolated_client, isolated_db  # noqa: F401  (fixtures are used by name)
 
 
