@@ -251,3 +251,15 @@ export interface AuditLogPage {
   limit: number;
   offset: number;
 }
+
+/** One completed visit in the patient's own health history (GET /patients/me/history). */
+export interface HistoryItem {
+  appointment_id: string;
+  start_time: string;
+  doctor_name: string | null;
+  doctor_specialization: string | null;
+  doctor_timezone: string | null;
+  medications: { name: string; dosage: string; frequency: string; duration_days: number | null }[];
+  instructions: string | null;
+  follow_up_steps: string | null;
+}
