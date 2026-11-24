@@ -308,6 +308,9 @@ export const api = {
 
   getDoctor: (doctorId: string) => get<Doctor>(`/doctors/${doctorId}`),
 
+  /** The signed-in doctor's own profile (doctors only). */
+  getMyDoctorProfile: () => get<Doctor>('/doctors/me'),
+
   getDoctorSchedule: (doctorId: string) => get<WorkingHours[]>(`/doctors/${doctorId}/schedule`),
 
   getDoctorLeaves: (doctorId: string) => get<DoctorLeave[]>(`/doctors/${doctorId}/leaves`),
