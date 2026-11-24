@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const doctors = (doctorsQuery.data ?? []).filter((d) => d.is_active);
   const stats = statsQuery.data;
   const conflictedCount = stats?.appointments_by_status.CONFLICTED ?? 0;
+  const noShowCount = stats?.appointments_by_status.NO_SHOW ?? 0;
 
   const loading = doctorsQuery.loading || statsQuery.loading;
   const error = doctorsQuery.error ?? statsQuery.error;
@@ -55,6 +56,10 @@ export default function AdminDashboard() {
             <div className={conflictedCount > 0 ? 'stat stat-danger' : 'stat'}>
               <span className="stat-value">{conflictedCount}</span>
               <span className="stat-label">Conflicted</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">{noShowCount}</span>
+              <span className="stat-label">No-shows</span>
             </div>
           </div>
 

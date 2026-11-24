@@ -15,11 +15,14 @@ import {
   Spinner,
   StatusBadge,
   SuccessBanner,
+  ConfirmDialog,
 } from '../../components/ui';
 
 // Mirrors the backend: consultations are only accepted for appointments that
 // are going ahead or have taken place.
 const CONSULTABLE = new Set(['CONFIRMED', 'RESCHEDULED', 'COMPLETED']);
+// A no-show can be recorded only from these, and only once the start time has passed.
+const NO_SHOW_FROM = new Set(['CONFIRMED', 'RESCHEDULED']);
 
 const EMPTY_MED: MedicationItem = { name: '', dosage: '', frequency: '', duration_days: null };
 
@@ -47,6 +50,24 @@ export default function DoctorAppointmentDetail() {
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmNoShow, setConfirmNoShow] = useState(false);
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  const [noShowError, setNoShowError] = useState<unknown>(null);
+
+  async function handleNoShow() {
+    setNoShowError(null);
+    setNoShowBusy(true);
+    try {
+      await api.markNoShow(appointmentId);
+      setNotice('Marked as a no-show. Pending reminders for this appointment were cancelled.');
+      apptQuery.reload();
+    } catch (err) {
+      setNoShowError(err);
+    } finally {
+      setNoShowBusy(false);
+      setConfirmNoShow(false);
+    }
+  }
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<unknown>(null);
@@ -153,6 +174,8 @@ export default function DoctorAppointmentDetail() {
 
       {notice ? <SuccessBanner>{notice}</SuccessBanner> : null}
 
+      <ErrorBanner error={noShowError} />
+
       <Card title="Appointment">
         <div className="summary-row">
           <span>Patient</span>
@@ -162,6 +185,13 @@ export default function DoctorAppointmentDetail() {
           <span>Status</span>
           <StatusBadge status={appt.status} />
         </div>
+        {NO_SHOW_FROM.has(appt.status) && new Date(appt.start_time).getTime() <= Date.now() ? (
+          <div className="row-actions">
+            <button type="button" className="btn" onClick={() => setConfirmNoShow(true)} disabled={noShowBusy}>
+              Mark as no-show
+            </button>
+          </div>
+        ) : null}
         <div className="summary-row">
           <span>Starts</span>
           <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
@@ -419,6 +449,15 @@ export default function DoctorAppointmentDetail() {
           </EmptyState>
         ) : null}
       </Card>
+      <ConfirmDialog
+        open={confirmNoShow}
+        title="Mark this appointment as a no-show?"
+        message={<p>Record that {appt.patient_name ?? 'the patient'} did not attend. Pending reminders are cancelled. This cannot be undone.</p>}
+        confirmLabel="Mark as no-show"
+        busy={noShowBusy}
+        onConfirm={handleNoShow}
+        onCancel={() => setConfirmNoShow(false)}
+      />
     </div>
   );
 }

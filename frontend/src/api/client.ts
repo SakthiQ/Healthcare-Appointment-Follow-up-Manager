@@ -372,6 +372,9 @@ export const api = {
   getAppointmentCalendar: async (id: string): Promise<string> =>
     (await send<string>(`/appointments/${id}/calendar.ics`, {}, 'text')).body,
 
+  /** Record that the patient did not attend (doctor or admin, after the start time). */
+  markNoShow: (id: string) => post<Appointment>(`/appointments/${id}/no-show`),
+
   cancelAppointment: (id: string, reason?: string) =>
     post<Appointment>(`/appointments/${id}/cancel`, { cancellation_reason: reason ?? null }),
 

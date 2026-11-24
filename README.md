@@ -86,7 +86,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
   - [#72](../../issues/72): use the app in Tamil or Hindi
   - [#53](../../issues/53): a dark theme that follows the system setting
 - *For doctors:*
-  - [#68](../../issues/68): mark an appointment as a no-show
   - [#73](../../issues/73): an AI summary of the patient's previous visits
 - *For admins and the hospital:*
   - [#70](../../issues/70): group doctors into departments

@@ -14,6 +14,7 @@ const FILTERS: { label: string; value: AppointmentStatus | '' }[] = [
   { label: 'Rescheduled', value: 'RESCHEDULED' },
   { label: 'Conflicted', value: 'CONFLICTED' },
   { label: 'Completed', value: 'COMPLETED' },
+  { label: 'No-show', value: 'NO_SHOW' },
   { label: 'Cancelled', value: 'CANCELLED' },
 ];
 

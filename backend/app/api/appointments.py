@@ -87,6 +87,19 @@ def get_appointment_calendar(
     )
 
 
+@router.post("/{appointment_id}/no-show", response_model=AppointmentResponse, status_code=status.HTTP_200_OK)
+def mark_no_show(
+    appointment_id: str,
+    current_user: User = Depends(require_role(UserRole.DOCTOR, UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Record that the patient did not attend: the appointment's doctor or an admin, after the
+    start time, from CONFIRMED or RESCHEDULED. Audited."""
+    result = appointment_service.mark_no_show(db, appointment_id=appointment_id, user=current_user)
+    audit_service.record_appointment_access(db, "appointment.no_show", current_user, appointment_id)
+    return result
+
+
 @router.post("/{appointment_id}/reschedule", response_model=AppointmentResponse, status_code=status.HTTP_200_OK)
 def reschedule_appointment(
     appointment_id: str,

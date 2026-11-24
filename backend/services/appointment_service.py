@@ -342,6 +342,31 @@ class AppointmentService:
         self._safe_sync_calendar(db, cancelled_appt, "cancelled")
         return response
 
+    def mark_no_show(self, db: Session, appointment_id: str, user: User) -> AppointmentResponse:
+        """Record that the patient did not turn up. Only the appointment's doctor or an admin,
+        only once the start time has passed (422 before), and only from CONFIRMED or
+        RESCHEDULED (409 otherwise). Pending reminders are retired after the commit."""
+        appt = appointment_repository.get_by_id(db, appointment_id, with_for_update=True)
+        if not appt:
+            raise NotFoundError("Appointment not found.")
+        if user.role == UserRole.DOCTOR and appt.doctor_id != user.id:
+            raise ForbiddenError("Not authorized to update this appointment.")
+        if appt.status not in (AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED):
+            raise ConflictError(f"Only a confirmed or rescheduled appointment can be marked as a no-show, not {appt.status.value}.")
+        if ensure_utc(appt.start_time) > datetime.now(timezone.utc):
+            raise ValidationError("An appointment can only be marked as a no-show after its start time.")
+
+        updated = appointment_repository.update_status(db, appt, AppointmentStatus.NO_SHOW)
+        response = AppointmentResponse.model_validate(updated)
+        try:
+            notification_service.supersede_pending_notifications(
+                db, updated.id, NotificationType.APPOINTMENT_REMINDER,
+                reason="Superseded: the patient did not attend.",
+            )
+        except Exception:
+            _abandon_failed_side_effect(db, updated, "retire reminders after a no-show")
+        return response
+
     def get_appointment(self, db: Session, appointment_id: str, user: User) -> AppointmentResponse:
         appt = appointment_repository.get_by_id(db, appointment_id)
         if not appt:

@@ -9,7 +9,8 @@ export type AppointmentStatus =
   | 'RESCHEDULED'
   | 'CANCELLED'
   | 'CONFLICTED'
-  | 'COMPLETED';
+  | 'COMPLETED'
+  | 'NO_SHOW';
 
 export type AISummaryType = 'PRE_VISIT' | 'POST_VISIT';
 export type AISummaryStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
