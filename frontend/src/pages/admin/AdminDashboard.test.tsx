@@ -58,7 +58,7 @@ describe('AdminDashboard', () => {
 
     expect(await screen.findByText('2481')).toBeInTheDocument();
     expect(screen.getByText('3 appointment(s) need attention')).toBeInTheDocument();
-    expect(screen.getByText('Dr Active')).toBeInTheDocument();
+    expect(screen.getByText('Dr Active', { selector: '.list-row strong' })).toBeInTheDocument();
     expect(screen.queryByText('Dr Gone')).not.toBeInTheDocument();
     expect(statsSpy).toHaveBeenCalledTimes(1);
     expect(listSpy).not.toHaveBeenCalled();
