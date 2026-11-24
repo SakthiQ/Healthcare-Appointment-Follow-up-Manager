@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { makeAuth, makeUser } from '../test/helpers';
 import Account from './Account';
+import { expectNoA11yViolations } from '../test/a11y';
 
 vi.mock('../auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/AuthContext')>()),
@@ -104,5 +105,13 @@ describe('Account: changing the password', () => {
     expect(await screen.findByText('Current password is incorrect.')).toBeInTheDocument();
     expect(screen.getByLabelText('Current password')).toHaveValue('wrong-password');
     expect(screen.queryByText(/other signed-in devices/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('Account: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.mocked(useAuth).mockReturnValue(makeAuth({ user: makeUser({ email_verified: false }) }));
+    render(<Account />);
+    await expectNoA11yViolations(document.body);
   });
 });

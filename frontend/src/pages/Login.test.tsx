@@ -6,6 +6,7 @@ import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { makeAuth, makeUser } from '../test/helpers';
 import Login from './Login';
+import { expectNoA11yViolations } from '../test/a11y';
 
 vi.mock('../auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/AuthContext')>()),
@@ -80,5 +81,12 @@ describe('Login', () => {
 
     expect(spy).toHaveBeenCalledWith('pat@example.com');
     expect(await screen.findByText(/we have sent it an email/i)).toBeInTheDocument();
+  });
+});
+
+describe('Login: accessibility', () => {
+  it('has no axe violations', async () => {
+    renderPage();
+    await expectNoA11yViolations(document.body);
   });
 });

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
 import type { Appointment } from '../../api/types';
 import PatientAppointments from './PatientAppointments';
+import { expectNoA11yViolations } from '../../test/a11y';
 
 function appt(n: number): Appointment {
   const start = new Date(Date.UTC(2030, 0, 7, 9, 0) + n * 86_400_000).toISOString();
@@ -73,5 +74,14 @@ describe('PatientAppointments', () => {
     renderList();
     expect(await screen.findByText(/Dr Number 1 ·/)).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument();
+  });
+});
+
+describe('PatientAppointments: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.spyOn(api, 'listAppointmentsPage').mockResolvedValue({ items: [appt(1)], total: 1 });
+    renderList();
+    await screen.findByText(/Dr Number 1 ·/);
+    await expectNoA11yViolations(document.body);
   });
 });

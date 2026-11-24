@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../../api/client';
 import type { Invitation, InvitationCreated } from '../../api/types';
 import Invitations from './Invitations';
+import { expectNoA11yViolations } from '../../test/a11y';
 
 function invitation(overrides: Partial<Invitation> = {}): Invitation {
   return {
@@ -147,5 +148,14 @@ describe('Invitations', () => {
 
     expect(revoke).toHaveBeenCalledWith('inv-1');
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('Invitations: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([invitation()]);
+    render(<Invitations />);
+    await screen.findByText('dr.pending@example.com');
+    await expectNoA11yViolations(document.body);
   });
 });

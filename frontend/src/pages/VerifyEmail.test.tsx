@@ -6,6 +6,7 @@ import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { makeAuth } from '../test/helpers';
 import VerifyEmail from './VerifyEmail';
+import { expectNoA11yViolations } from '../test/a11y';
 
 vi.mock('../auth/AuthContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/AuthContext')>()),
@@ -74,5 +75,15 @@ describe('VerifyEmail', () => {
 
     expect(screen.getByText(/this link is incomplete/i)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('VerifyEmail: accessibility', () => {
+  it('has no axe violations', async () => {
+    vi.mocked(useAuth).mockReturnValue(makeAuth({ user: null }));
+    vi.spyOn(api, 'verifyEmail').mockResolvedValue(undefined);
+    renderPage('/verify-email?token=abcdefghijklmnop');
+    await screen.findByText(/your email address is confirmed/i);
+    await expectNoA11yViolations(document.body);
   });
 });

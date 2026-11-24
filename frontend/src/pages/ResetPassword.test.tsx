@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
 import ResetPassword from './ResetPassword';
+import { expectNoA11yViolations } from '../test/a11y';
 
 function renderPage(url = '/reset-password?token=abcdefghijklmnop') {
   return render(
@@ -66,5 +67,13 @@ describe('ResetPassword', () => {
     expect(await screen.findByText(/invalid or has expired/i)).toBeInTheDocument();
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Request a new one' })).toHaveAttribute('href', '/forgot-password');
+  });
+});
+
+describe('ResetPassword: accessibility', () => {
+  it('has no axe violations', async () => {
+    renderPage();
+    await screen.findByLabelText('New password');
+    await expectNoA11yViolations(document.body);
   });
 });
