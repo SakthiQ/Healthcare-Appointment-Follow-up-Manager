@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // In Docker (compose.yaml) bind-mounted files don't always send change events, so poll.
+    watch: process.env.VITE_USE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
     // Dev-only proxy so the browser talks to same-origin /api and avoids CORS.
     // In production VITE_API_BASE_URL points at the deployed backend instead.
     proxy: {

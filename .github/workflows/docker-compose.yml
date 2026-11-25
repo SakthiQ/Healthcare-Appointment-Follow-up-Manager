@@ -1,0 +1,92 @@
+name: Docker Compose
+
+# Checks that the local development setup in compose.yaml still starts and works: the
+# database, migrations, the API, the Vite dev server and its proxy, the demo seed, sign-in
+# for every role, and live reload. Runs only when something it depends on changes.
+on:
+  pull_request:
+    paths:
+      - compose.yaml
+      - "**/Dockerfile.dev"
+      - "**/.dockerignore"
+      - backend/requirements.txt
+      - backend/constraints.txt
+      - backend/alembic/**
+      - backend/scripts/seed_demo.py
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/vite.config.ts
+      - .github/workflows/docker-compose.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    name: Docker Compose up
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versions
+        run: |
+          docker version --format 'Docker {{.Server.Version}}'
+          docker compose version
+
+      - name: Start the stack and wait until every service is healthy
+        run: docker compose up --build --detach --wait --wait-timeout 300
+
+      - name: Create the demo accounts
+        run: docker compose run --rm backend python -m scripts.seed_demo
+
+      - name: The app is served, and every role can sign in through the dev server's proxy
+        run: |
+          curl -fsS http://localhost:8000/health
+          echo
+          curl -fsS http://localhost:5173/ | grep -q '<div id="root">'
+          for role in patient doctor admin; do
+            token=$(curl -fsS -X POST http://localhost:5173/api/v1/auth/login \
+              -H 'Content-Type: application/json' \
+              -d "{\"email\": \"$role@demo.example.com\", \"password\": \"demo-password\"}" | jq -r .access_token)
+            test -n "$token" && test "$token" != null
+            me=$(curl -fsS http://localhost:5173/api/v1/auth/me -H "Authorization: Bearer $token" | jq -r .role)
+            echo "$role signed in as $me"
+            test "$me" = "$(echo "$role" | tr a-z A-Z)"
+          done
+
+      - name: The database is PostgreSQL and the migrations are at head
+        run: |
+          docker compose exec -T db psql -U postgres -d healthcare_db -tAc 'select version_num from alembic_version'
+          docker compose exec -T backend alembic current | grep -q '(head)'
+
+      - name: Code changes reload without a rebuild
+        run: |
+          # Frontend: the dev server serves the edited file.
+          echo '// compose-reload-check' >> frontend/src/main.tsx
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:5173/src/main.tsx | grep -q compose-reload-check && break
+            sleep 1
+          done
+          curl -fsS http://localhost:5173/src/main.tsx | grep -q compose-reload-check
+          # Backend: uvicorn notices the edit and restarts, then serves again.
+          echo '# compose-reload-check' >> backend/app/main.py
+          for i in $(seq 1 60); do
+            docker compose logs backend | grep -q 'WatchFiles detected changes' && break
+            sleep 1
+          done
+          docker compose logs backend | grep -q 'WatchFiles detected changes'
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8000/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://localhost:8000/health
+
+      - name: Logs
+        if: always()
+        run: docker compose logs --no-color
+
+      - name: Stop
+        if: always()
+        run: docker compose down --volumes
