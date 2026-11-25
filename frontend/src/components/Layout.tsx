@@ -2,35 +2,38 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { InfoBanner } from './ui';
 import type { UserRole } from '../api/types';
+import { LanguagePicker, useT } from '../i18n/I18n';
+import type { MessageKey } from '../locales/en';
 
-const NAV_BY_ROLE: Record<UserRole, { to: string; label: string }[]> = {
+const NAV_BY_ROLE: Record<UserRole, { to: string; label: MessageKey }[]> = {
   PATIENT: [
-    { to: '/patient', label: 'Dashboard' },
-    { to: '/patient/doctors', label: 'Find a doctor' },
-    { to: '/patient/appointments', label: 'My appointments' },
-    { to: '/patient/history', label: 'My health history' },
-    { to: '/account', label: 'Account' },
+    { to: '/patient', label: 'nav.dashboard' },
+    { to: '/patient/doctors', label: 'nav.findDoctor' },
+    { to: '/patient/appointments', label: 'nav.myAppointments' },
+    { to: '/patient/history', label: 'nav.healthHistory' },
+    { to: '/account', label: 'nav.account' },
   ],
   DOCTOR: [
-    { to: '/doctor', label: 'Dashboard' },
-    { to: '/doctor/appointments', label: 'Appointments' },
-    { to: '/doctor/schedule', label: 'My schedule' },
-    { to: '/account', label: 'Account' },
+    { to: '/doctor', label: 'nav.dashboard' },
+    { to: '/doctor/appointments', label: 'nav.appointments' },
+    { to: '/doctor/schedule', label: 'nav.mySchedule' },
+    { to: '/account', label: 'nav.account' },
   ],
   ADMIN: [
-    { to: '/admin', label: 'Dashboard' },
-    { to: '/admin/doctors', label: 'Doctors' },
-    { to: '/admin/departments', label: 'Departments' },
-    { to: '/admin/invitations', label: 'Invitations' },
-    { to: '/admin/conflicts', label: 'Conflicted appointments' },
-    { to: '/admin/failed-jobs', label: 'Failed jobs' },
-    { to: '/admin/audit', label: 'Audit log' },
-    { to: '/account', label: 'Account' },
+    { to: '/admin', label: 'nav.dashboard' },
+    { to: '/admin/doctors', label: 'nav.doctors' },
+    { to: '/admin/departments', label: 'nav.departments' },
+    { to: '/admin/invitations', label: 'nav.invitations' },
+    { to: '/admin/conflicts', label: 'nav.conflicts' },
+    { to: '/admin/failed-jobs', label: 'nav.failedJobs' },
+    { to: '/admin/audit', label: 'nav.audit' },
+    { to: '/account', label: 'nav.account' },
   ],
 };
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const t = useT();
   const navigate = useNavigate();
 
   const links = user ? NAV_BY_ROLE[user.role] : [];
@@ -51,7 +54,7 @@ export default function Layout() {
 
           {user ? (
             <>
-              <nav className="nav" aria-label="Main">
+              <nav className="nav" aria-label={t('layout.mainNav')}>
                 {links.map((l) => (
                   <NavLink
                     key={l.to}
@@ -59,7 +62,7 @@ export default function Layout() {
                     end={l.to.split('/').length <= 2}
                     className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
                   >
-                    {l.label}
+                    {t(l.label)}
                   </NavLink>
                 ))}
               </nav>
@@ -69,19 +72,20 @@ export default function Layout() {
                   <span className="role-tag">{user.role}</span>
                 </span>
                 <button type="button" className="btn btn-sm" onClick={handleLogout}>
-                  Log out
+                  {t('layout.logout')}
                 </button>
               </div>
             </>
           ) : null}
+          <LanguagePicker />
         </div>
       </header>
 
       <main className="content">
         {user && !user.email_verified ? (
           <InfoBanner>
-            Your email address is not verified yet. <Link to="/account">Open your account</Link> to
-            send the confirmation link again.
+            {t('layout.unverified')} <Link to="/account">{t('layout.openAccount')}</Link>{' '}
+            {t('layout.unverifiedRest')}
           </InfoBanner>
         ) : null}
         <Outlet />

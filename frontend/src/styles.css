@@ -342,3 +342,8 @@ textarea { resize: vertical; }
   .day-row { flex-direction: column; align-items: stretch; }
   .day-row input[type='time'] { width: 100%; }
 }
+
+/* Language picker (header and sign-in pages). */
+.language-picker { margin-left: auto; }
+.language-picker select { width: auto; padding: 0.3rem 0.5rem; font-size: 0.85rem; }
+.auth-card .language-picker { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }

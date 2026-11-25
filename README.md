@@ -80,7 +80,6 @@ clean database for every backend test.
 list. New contributors should start with [`good first issue`](../../labels/good%20first%20issue).
 
 - *For patients:*
-  - [#72](../../issues/72): use the app in Tamil or Hindi
 - *For doctors:*
   - [#73](../../issues/73): an AI summary of the patient's previous visits
 - *For admins and the hospital:*

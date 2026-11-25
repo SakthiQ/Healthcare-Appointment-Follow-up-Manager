@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAsync } from '../../lib/useAsync';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
+import { useT } from '../../i18n/I18n';
 
 export default function DoctorSearch() {
+  const t = useT();
   const [nameInput, setNameInput] = useState('');
   const [specInput, setSpecInput] = useState('');
   const [query, setQuery] = useState({ name: '', specialization: '' });
@@ -31,16 +33,16 @@ export default function DoctorSearch() {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1>Find a doctor</h1>
-          <p className="muted">Search by name or specialisation, then pick an available slot.</p>
+          <h1>{t('nav.findDoctor')}</h1>
+          <p className="muted">{t('search.subtitle')}</p>
         </div>
       </header>
 
       {departments.length > 0 ? (
-        <div className="filter-row" role="group" aria-label="Departments">
+        <div className="filter-row" role="group" aria-label={t('search.departments')}>
           <button type="button" className={departmentId === '' ? 'pill active' : 'pill'} aria-pressed={departmentId === ''}
             onClick={() => setDepartmentId('')}>
-            All departments
+            {t('search.allDepartments')}
           </button>
           {departments.map((d) => (
             <button key={d.id} type="button" className={departmentId === d.id ? 'pill active' : 'pill'}
@@ -54,25 +56,25 @@ export default function DoctorSearch() {
       <Card>
         <form className="search-bar" onSubmit={handleSubmit}>
           <label className="sr-only" htmlFor="doctor-name">
-            Doctor's name
+            {t('search.nameLabel')}
           </label>
           <input
             id="doctor-name"
-            placeholder="Doctor's name, e.g. Rao"
+            placeholder={t('search.namePlaceholder')}
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
           />
           <label className="sr-only" htmlFor="specialization">
-            Specialisation
+            {t('search.specLabel')}
           </label>
           <input
             id="specialization"
-            placeholder="Specialisation, e.g. Cardiology"
+            placeholder={t('search.specPlaceholder')}
             value={specInput}
             onChange={(e) => setSpecInput(e.target.value)}
           />
           <button type="submit" className="btn btn-primary">
-            Search
+            {t('search.submit')}
           </button>
           {searching ? (
             <button
@@ -84,20 +86,19 @@ export default function DoctorSearch() {
                 setQuery({ name: '', specialization: '' });
               }}
             >
-              Clear
+              {t('search.clear')}
             </button>
           ) : null}
         </form>
       </Card>
 
-      <Card title={searching ? `Doctors matching "${searchLabel}"` : 'All available doctors'}>
-        {loading ? <Spinner label="Searching…" /> : null}
+      <Card title={searching ? t('search.matching', { query: searchLabel }) : t('search.allDoctors')}>
+        {loading ? <Spinner label={t('search.searching')} /> : null}
         <ErrorBanner error={error} onRetry={reload} />
         {!loading && !error ? (
           doctors.length === 0 ? (
             <EmptyState>
-              No doctors found{searching ? ` for "${searchLabel}"` : ''}. Try a different name or
-              specialisation.
+              {searching ? t('search.noneFor', { query: searchLabel }) : t('search.none')}
             </EmptyState>
           ) : (
             <div className="grid">
@@ -107,12 +108,12 @@ export default function DoctorSearch() {
                   <p className="tile-sub">{doc.specialization}</p>
                   <dl className="kv">
                     <div>
-                      <dt>Appointment length</dt>
-                      <dd>{doc.slot_duration_minutes} minutes</dd>
+                      <dt>{t('search.length')}</dt>
+                      <dd>{t('search.minutes', { count: doc.slot_duration_minutes })}</dd>
                     </div>
                   </dl>
                   <Link className="btn btn-primary btn-block" to={`/patient/doctors/${doc.id}`}>
-                    View availability
+                    {t('search.viewAvailability')}
                   </Link>
                 </article>
               ))}

@@ -33,10 +33,18 @@ function zoneLabel(date: Date, tz: string): string {
   return part?.value ?? tz;
 }
 
+// The language dates and times are written in. The language picker changes it; English uses
+// en-GB, so "07 Jan 2030, 09:30". Time-zone names (IST, UTC) stay in English everywhere.
+let displayLocale = 'en-GB';
+
+export function setDisplayLocale(locale: string): void {
+  displayLocale = locale;
+}
+
 export function formatDateTime(iso: string, tz?: string | null): string {
   const zone = safeZone(tz);
   const date = new Date(iso);
-  const text = date.toLocaleString('en-GB', {
+  const text = date.toLocaleString(displayLocale, {
     timeZone: zone,
     year: 'numeric',
     month: 'short',
@@ -49,7 +57,7 @@ export function formatDateTime(iso: string, tz?: string | null): string {
 }
 
 export function formatTime(iso: string, tz?: string | null): string {
-  return new Date(iso).toLocaleString('en-GB', {
+  return new Date(iso).toLocaleString(displayLocale, {
     timeZone: safeZone(tz),
     hour: '2-digit',
     minute: '2-digit',
@@ -58,7 +66,7 @@ export function formatTime(iso: string, tz?: string | null): string {
 }
 
 export function formatDate(iso: string, tz?: string | null): string {
-  return new Date(iso).toLocaleString('en-GB', {
+  return new Date(iso).toLocaleString(displayLocale, {
     timeZone: safeZone(tz),
     weekday: 'short',
     year: 'numeric',

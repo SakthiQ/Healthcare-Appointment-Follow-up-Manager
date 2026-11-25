@@ -5,10 +5,12 @@ import type { InvitationLookup } from '../api/types';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
 import { ErrorBanner, Field, Spinner } from '../components/ui';
 import { MIN_PASSWORD_LENGTH } from '../lib/password';
+import { LanguagePicker, useT } from '../i18n/I18n';
 
 const ROLE_LABEL = { DOCTOR: 'a doctor', ADMIN: 'an administrator' } as const;
 
 export default function Register() {
+  const t = useT();
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -56,11 +58,11 @@ export default function Register() {
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (fullName.trim().length < 2) errs.fullName = 'Enter your full name (at least 2 characters).';
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = 'Enter a valid email address.';
+    if (fullName.trim().length < 2) errs.fullName = t('register.fullNameError');
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = t('validation.emailInvalid');
     if (password.length < MIN_PASSWORD_LENGTH)
       errs.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
-    if (confirm !== password) errs.confirm = 'Passwords do not match.';
+    if (confirm !== password) errs.confirm = t('register.mismatch');
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -94,7 +96,7 @@ export default function Register() {
     return (
       <div className="auth-page">
         <div className="auth-card">
-          <Spinner label="Checking your invitation…" />
+          <Spinner label={t('register.checkingInvite')} />
         </div>
       </div>
     );
@@ -104,11 +106,11 @@ export default function Register() {
     return (
       <div className="auth-page">
         <div className="auth-card">
-          <h1>Invitation problem</h1>
+          <LanguagePicker />
+          <h1>{t('register.inviteProblem')}</h1>
           <ErrorBanner error={inviteError} />
           <p className="auth-alt">
-            <Link to="/login">Sign in</Link> if you already have an account, or ask an administrator
-            for a new invitation.
+            <Link to="/login">{t('login.submit')}</Link> {t('register.inviteProblemHelp')}
           </p>
         </div>
       </div>
@@ -118,20 +120,20 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Create your account</h1>
+        <LanguagePicker />
+        <h1>{t('register.title')}</h1>
         {invitation ? (
           <p className="muted">
-            You have been invited to join as <strong>{ROLE_LABEL[invitation.role]}</strong>. Choose a
-            password to finish.
+            {t('register.invited', { role: ROLE_LABEL[invitation.role] })}
           </p>
         ) : (
-          <p className="muted">Register as a patient to book appointments.</p>
+          <p className="muted">{t('register.asPatient')}</p>
         )}
 
         <ErrorBanner error={error} />
 
         <form onSubmit={handleSubmit} noValidate>
-          <Field label="Full name" htmlFor="fullName" error={fieldErrors.fullName}>
+          <Field label={t('register.fullName')} htmlFor="fullName" error={fieldErrors.fullName}>
             <input
               id="fullName"
               value={fullName}
@@ -142,10 +144,10 @@ export default function Register() {
           </Field>
 
           <Field
-            label="Email"
+            label={t('login.email')}
             htmlFor="email"
             error={fieldErrors.email}
-            hint={invitation ? 'The address your invitation was sent to.' : undefined}
+            hint={invitation ? t('register.inviteEmailHint') : undefined}
           >
             <input
               id="email"
@@ -159,10 +161,10 @@ export default function Register() {
           </Field>
 
           <Field
-            label="Password"
+            label={t('login.password')}
             htmlFor="password"
             error={fieldErrors.password}
-            hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+            hint={t('register.passwordHint', { count: MIN_PASSWORD_LENGTH })}
           >
             <input
               id="password"
@@ -174,7 +176,7 @@ export default function Register() {
             />
           </Field>
 
-          <Field label="Confirm password" htmlFor="confirm" error={fieldErrors.confirm}>
+          <Field label={t('register.confirm')} htmlFor="confirm" error={fieldErrors.confirm}>
             <input
               id="confirm"
               type="password"
@@ -186,12 +188,12 @@ export default function Register() {
           </Field>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-            {submitting ? 'Creating account…' : 'Create account'}
+            {submitting ? t('register.creating') : t('register.submit')}
           </button>
         </form>
 
         <p className="auth-alt">
-          Already registered? <Link to="/login">Sign in</Link>
+          {t('register.already')} <Link to="/login">{t('login.submit')}</Link>
         </p>
       </div>
     </div>

@@ -2,8 +2,10 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { ErrorBanner, Field, SuccessBanner } from '../components/ui';
+import { LanguagePicker, useT } from '../i18n/I18n';
 
 export default function ForgotPassword() {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [error, setError] = useState<unknown>(null);
@@ -14,7 +16,7 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError(null);
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setFieldError('Enter a valid email address.');
+      setFieldError(t('validation.emailInvalid'));
       return;
     }
     setFieldError(undefined);
@@ -34,14 +36,15 @@ export default function ForgotPassword() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Forgot your password?</h1>
-        <p className="muted">Enter your email and we will send you a link to choose a new one.</p>
+        <LanguagePicker />
+        <h1>{t('forgot.title')}</h1>
+        <p className="muted">{t('forgot.subtitle')}</p>
 
         <ErrorBanner error={error} />
-        {sent ? <SuccessBanner>{sent} The link works for 30 minutes.</SuccessBanner> : null}
+        {sent ? <SuccessBanner>{sent} {t('forgot.linkValid')}</SuccessBanner> : null}
 
         <form onSubmit={handleSubmit} noValidate>
-          <Field label="Email" htmlFor="email" error={fieldError}>
+          <Field label={t('login.email')} htmlFor="email" error={fieldError}>
             <input
               id="email"
               type="email"
@@ -52,12 +55,12 @@ export default function ForgotPassword() {
             />
           </Field>
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-            {submitting ? 'Sending…' : sent ? 'Send it again' : 'Send reset link'}
+            {submitting ? t('forgot.sending') : sent ? t('forgot.sendAgain') : t('forgot.send')}
           </button>
         </form>
 
         <p className="auth-alt">
-          <Link to="/login">Back to sign in</Link>
+          <Link to="/login">{t('common.backToSignIn')}</Link>
         </p>
       </div>
     </div>

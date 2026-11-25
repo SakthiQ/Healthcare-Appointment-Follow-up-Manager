@@ -5,19 +5,22 @@ import type { AppointmentStatus } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
 import { Card, EmptyState, ErrorBanner, Pager, Spinner, StatusBadge } from '../../components/ui';
+import { useT } from '../../i18n/I18n';
+import type { MessageKey } from '../../locales/en';
 
 const PAGE_SIZE = 25;
 
-const FILTERS: { label: string; value: AppointmentStatus | '' }[] = [
-  { label: 'All', value: '' },
-  { label: 'Confirmed', value: 'CONFIRMED' },
-  { label: 'Rescheduled', value: 'RESCHEDULED' },
-  { label: 'Conflicted', value: 'CONFLICTED' },
-  { label: 'Cancelled', value: 'CANCELLED' },
-  { label: 'Completed', value: 'COMPLETED' },
+const FILTERS: { label: MessageKey; value: AppointmentStatus | '' }[] = [
+  { label: 'status.all', value: '' },
+  { label: 'status.CONFIRMED', value: 'CONFIRMED' },
+  { label: 'status.RESCHEDULED', value: 'RESCHEDULED' },
+  { label: 'status.CONFLICTED', value: 'CONFLICTED' },
+  { label: 'status.CANCELLED', value: 'CANCELLED' },
+  { label: 'status.COMPLETED', value: 'COMPLETED' },
 ];
 
 export default function PatientAppointments() {
+  const t = useT();
   const [filter, setFilter] = useState<AppointmentStatus | ''>('');
   const [page, setPage] = useState(0);
   // One page at a time: a long history no longer means downloading every appointment.
@@ -37,16 +40,16 @@ export default function PatientAppointments() {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1>My appointments</h1>
+          <h1>{t('nav.myAppointments')}</h1>
           <p className="muted">Everything you've booked, past and upcoming.</p>
         </div>
         <Link to="/patient/doctors" className="btn btn-primary">
-          Book another
+          {t('appts.bookAnother')}
         </Link>
       </header>
 
       <Card>
-        <div className="filter-row" role="group" aria-label="Filter by status">
+        <div className="filter-row" role="group" aria-label={t('appts.filter')}>
           {FILTERS.map((f) => (
             <button
               key={f.value || 'all'}
@@ -57,7 +60,7 @@ export default function PatientAppointments() {
                 setPage(0);
               }}
             >
-              {f.label}
+              {t(f.label)}
             </button>
           ))}
         </div>
@@ -68,7 +71,7 @@ export default function PatientAppointments() {
         <ErrorBanner error={error} onRetry={reload} />
         {!loading && !error ? (
           appointments.length === 0 ? (
-            <EmptyState>No appointments{filter ? ` with status ${filter}` : ''} yet.</EmptyState>
+            <EmptyState>{filter ? t('appts.noneWithStatus', { status: filter }) : t('appts.none')}</EmptyState>
           ) : (
             <ul className="list">
               {appointments.map((appt) => (
@@ -76,13 +79,13 @@ export default function PatientAppointments() {
                   <div>
                     <strong>{formatDateTime(appt.start_time, appt.doctor_timezone)}</strong>
                     <div className="muted small">
-                      {appt.doctor_name ?? 'Unknown doctor'} · Ends {formatDateTime(appt.end_time, appt.doctor_timezone)}
+                      {appt.doctor_name ?? t('appts.unknownDoctor')} · {t('appts.ends')} {formatDateTime(appt.end_time, appt.doctor_timezone)}
                     </div>
                   </div>
                   <div className="list-row-end">
                     <StatusBadge status={appt.status} />
                     <Link className="btn btn-sm" to={`/patient/appointments/${appt.id}`}>
-                      Details
+                      {t('appts.details')}
                     </Link>
                   </div>
                 </li>
