@@ -8,10 +8,13 @@ export default function DoctorSearch() {
   const [nameInput, setNameInput] = useState('');
   const [specInput, setSpecInput] = useState('');
   const [query, setQuery] = useState({ name: '', specialization: '' });
+  const [departmentId, setDepartmentId] = useState('');
+  const departmentsQuery = useAsync(() => api.listDepartments().catch(() => []), []);
+  const departments = departmentsQuery.data ?? [];
 
   const { data, loading, error, reload } = useAsync(
-    () => api.searchDoctors(query),
-    [query.name, query.specialization],
+    () => api.searchDoctors({ ...query, department_id: departmentId || undefined }),
+    [query.name, query.specialization, departmentId],
   );
 
   function handleSubmit(e: FormEvent) {
@@ -32,6 +35,21 @@ export default function DoctorSearch() {
           <p className="muted">Search by name or specialisation, then pick an available slot.</p>
         </div>
       </header>
+
+      {departments.length > 0 ? (
+        <div className="filter-row" role="group" aria-label="Departments">
+          <button type="button" className={departmentId === '' ? 'pill active' : 'pill'} aria-pressed={departmentId === ''}
+            onClick={() => setDepartmentId('')}>
+            All departments
+          </button>
+          {departments.map((d) => (
+            <button key={d.id} type="button" className={departmentId === d.id ? 'pill active' : 'pill'}
+              aria-pressed={departmentId === d.id} onClick={() => setDepartmentId(d.id)}>
+              {d.name} ({d.active_doctor_count})
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <Card>
         <form className="search-bar" onSubmit={handleSubmit}>

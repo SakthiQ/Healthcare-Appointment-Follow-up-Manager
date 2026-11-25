@@ -26,6 +26,7 @@ import type {
   HistoryItem,
   PatientProfile,
   PatientHealth,
+  Department,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -310,15 +311,25 @@ export const api = {
     post<MessageResponse>('/auth/resend-verification', { email }),
 
   // --- Doctors (public / patient) ---
-  searchDoctors: (filters: { specialization?: string; name?: string } = {}) => {
+  searchDoctors: (filters: { specialization?: string; name?: string; department_id?: string } = {}) => {
     const params = new URLSearchParams();
     if (filters.specialization?.trim()) params.set('specialization', filters.specialization.trim());
     if (filters.name?.trim()) params.set('name', filters.name.trim());
+    if (filters.department_id) params.set('department_id', filters.department_id);
     const query = params.toString();
     return get<Doctor[]>(`/doctors${query ? `?${query}` : ''}`);
   },
 
   getDoctor: (doctorId: string) => get<Doctor>(`/doctors/${doctorId}`),
+
+  /** Active departments with their active-doctor counts (public). */
+  listDepartments: () => get<Department[]>('/departments'),
+  /** Every department, deactivated ones included (admin). */
+  adminListDepartments: () => get<Department[]>('/admin/departments'),
+  createDepartment: (data: { name: string; description?: string | null }) =>
+    post<Department>('/admin/departments', data),
+  updateDepartment: (id: string, data: { name?: string; description?: string | null; is_active?: boolean }) =>
+    patch<Department>(`/admin/departments/${id}`, data),
 
   /** The signed-in doctor's own profile (doctors only). */
   getMyDoctorProfile: () => get<Doctor>('/doctors/me'),
@@ -425,11 +436,18 @@ export const api = {
     specialization: string;
     slot_duration_minutes: number;
     timezone: string;
+    department_id?: string | null;
   }) => post<Doctor>('/admin/doctors', data),
 
   updateDoctor: (
     doctorId: string,
-    data: { specialization?: string; slot_duration_minutes?: number; is_active?: boolean; timezone?: string },
+    data: {
+      specialization?: string;
+      slot_duration_minutes?: number;
+      is_active?: boolean;
+      timezone?: string;
+      department_id?: string | null;
+    },
   ) => put<Doctor>(`/admin/doctors/${doctorId}`, data),
 
   setDoctorStatus: (doctorId: string, isActive: boolean) =>

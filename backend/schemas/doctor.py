@@ -18,6 +18,7 @@ class DoctorCreateRequest(BaseModel):
     specialization: str = Field(..., min_length=2)
     slot_duration_minutes: int = Field(default=30, ge=5, le=240)
     timezone: str = Field(default="UTC", max_length=64, description="IANA timezone the working hours are written in")
+    department_id: Optional[str] = Field(default=None, max_length=36)
 
     _validate_timezone = field_validator("timezone")(_check_timezone)
     # Same limit as every other password field: bcrypt raises on more than 72 bytes,
@@ -30,6 +31,8 @@ class DoctorUpdateRequest(BaseModel):
     slot_duration_minutes: Optional[int] = Field(default=None, ge=5, le=240)
     is_active: Optional[bool] = None
     timezone: Optional[str] = Field(default=None, max_length=64)
+    # Send null to take the doctor out of their department; leave it out to keep it.
+    department_id: Optional[str] = Field(default=None, max_length=36)
 
     _validate_timezone = field_validator("timezone")(_check_timezone)
 
@@ -48,6 +51,8 @@ class DoctorResponse(BaseModel):
     timezone: str = "UTC"
     is_active: bool
     created_at: datetime
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
 
 
 class WorkingHoursItem(BaseModel):

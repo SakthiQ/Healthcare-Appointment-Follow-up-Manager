@@ -36,6 +36,8 @@ export default function DoctorConfig() {
   const [specialization, setSpecialization] = useState('');
   const [slotDuration, setSlotDuration] = useState(30);
   const [timezone, setTimezone] = useState('UTC');
+  const [departmentId, setDepartmentId] = useState('');
+  const departmentsQuery = useAsync(() => api.adminListDepartments().catch(() => []), []);
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
   const [profileError, setProfileError] = useState<unknown>(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -60,6 +62,7 @@ export default function DoctorConfig() {
       setSpecialization(doctorQuery.data.specialization);
       setSlotDuration(doctorQuery.data.slot_duration_minutes);
       setTimezone(doctorQuery.data.timezone);
+      setDepartmentId(doctorQuery.data.department_id ?? '');
     }
   }, [doctorQuery.data]);
 
@@ -98,6 +101,8 @@ export default function DoctorConfig() {
         specialization: specialization.trim(),
         slot_duration_minutes: slotDuration,
         timezone: timezone.trim() || 'UTC',
+        // Only sent when it changed, so saving other fields never touches the department.
+        ...(departmentId !== (doctorQuery.data?.department_id ?? '') ? { department_id: departmentId || null } : {}),
       });
       setNotice('Profile updated.');
       doctorQuery.reload();
@@ -291,6 +296,18 @@ export default function DoctorConfig() {
                   <option key={zone} value={zone} />
                 ))}
               </datalist>
+            </Field>
+            <Field label="Department" htmlFor="department">
+              <select id="department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={savingProfile}>
+                <option value="">No department</option>
+                {(departmentsQuery.data ?? [])
+                  .filter((d) => d.is_active || d.id === departmentId)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.is_active ? d.name : `${d.name} (deactivated)`}
+                    </option>
+                  ))}
+              </select>
             </Field>
           </div>
           <div className="row-actions">

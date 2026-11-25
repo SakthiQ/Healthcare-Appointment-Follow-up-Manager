@@ -86,7 +86,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
 - *For doctors:*
   - [#73](../../issues/73): an AI summary of the patient's previous visits
 - *For admins and the hospital:*
-  - [#70](../../issues/70): group doctors into departments
   - [#65](../../issues/65): a page to retry failed emails and calendar syncs
   - [#52](../../issues/52): clearer appointment emails with names, links and HTML
 - *Frontend tests:*
@@ -344,11 +343,11 @@ summary:
 The full ERD, state machines and constraints are in `docs/database-design.md`. Core entities:
 `User`, `Doctor` (+ `DoctorWorkingHours`, `DoctorLeave`), `Appointment` (+
 `AppointmentHold`), `SymptomReport`, `AISummary`, `Consultation` (+ `Prescription`,
-`Medication`), `PatientProfile` (optional date of birth, phone and allergies; health data,
+`Medication`), `Department` (groups doctors; names unique regardless of case), `PatientProfile` (optional date of birth, phone and allergies; health data,
 read only by the patient, the appointment's doctor and admins, and audited), `NotificationJob`,
 `CalendarEvent`, plus `AuthToken` (password-reset and
 verification links), `Invitation` (staff signup links), `AuditLog`, `RateLimit` and
-`LoginThrottle`. The schema comes entirely from migrations: 13 Alembic revisions in
+`LoginThrottle`. The schema comes entirely from migrations: 14 Alembic revisions in
 `backend/alembic/versions/`, which CI applies to an empty database.
 
 The appointment state machine is `HELD → CONFIRMED → {RESCHEDULED, CANCELLED,

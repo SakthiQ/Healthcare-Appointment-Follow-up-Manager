@@ -20,6 +20,7 @@ const NAV_BY_ROLE: Record<UserRole, { to: string; label: string }[]> = {
   ADMIN: [
     { to: '/admin', label: 'Dashboard' },
     { to: '/admin/doctors', label: 'Doctors' },
+    { to: '/admin/departments', label: 'Departments' },
     { to: '/admin/invitations', label: 'Invitations' },
     { to: '/admin/conflicts', label: 'Conflicted appointments' },
     { to: '/admin/failed-jobs', label: 'Failed jobs' },

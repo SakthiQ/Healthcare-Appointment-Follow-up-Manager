@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import date
-from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm import Session, contains_eager, selectinload
 from models.user import User
 from models.doctor import Doctor, DoctorWorkingHours, DoctorLeave
 
@@ -28,15 +28,17 @@ class DoctorRepository:
 
     def search(
         self, db: Session, specialization: Optional[str] = None, active_only: bool = True,
-        name: Optional[str] = None,
+        name: Optional[str] = None, department_id: Optional[str] = None,
     ) -> List[Doctor]:
         # contains_eager fills Doctor.user from the join this query already does, so
         # building the responses (name, email) costs no extra query per doctor.
         query = (
             db.query(Doctor)
             .join(User, Doctor.user_id == User.id)
-            .options(contains_eager(Doctor.user))
+            .options(contains_eager(Doctor.user), selectinload(Doctor.department))
         )
+        if department_id:
+            query = query.filter(Doctor.department_id == department_id)
         if active_only:
             query = query.filter(Doctor.is_active.is_(True), User.is_active.is_(True))
         if specialization and specialization.strip():

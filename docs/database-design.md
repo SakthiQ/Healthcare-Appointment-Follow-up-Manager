@@ -248,6 +248,9 @@ stateDiagram-v2
 - `auth_tokens(id PK, user_id FK, purpose, token_hash UNIQUE, expires_at, used_at, created_at)`: single-use password-reset and email-verification tokens; only the hash is stored.
 - `audit_logs(id PK, occurred_at, actor_user_id, actor_role, action, resource_type, resource_id, patient_id, ip, detail)`: append-only, deliberately no foreign keys, indexed on time, actor, action, resource and patient.
 - `notificationtype` enum gained `PASSWORD_RESET` and `EMAIL_VERIFICATION`. On PostgreSQL the migration runs `ALTER TYPE ... ADD VALUE` outside a transaction block; PostgreSQL cannot remove an enum value, so a downgrade leaves them (unused).
+- `appointmentstatus` enum gained `NO_SHOW` (#68). It is not in the active-status list, so the unique index and overlap constraint ignore it, like `CANCELLED`.
+- `patient_profiles(id PK, user_id FK UNIQUE, date_of_birth, phone, allergies, updated_at)` (#67): optional health details, read only by the patient, the appointment's doctor and admins, audited.
+- `departments(id PK, name, description, is_active, created_at)` (#70): unique index `uq_departments_name_lower` on `lower(name)`, so names are unique regardless of case. `doctors.department_id` (FK, nullable, `ON DELETE SET NULL`, indexed) puts a doctor in at most one department; existing doctors keep working with none.
 
 ### Doctor Leave Constraint
 - Doctor leave dates prevent slot generation for the full 24-hour day of the leave date.

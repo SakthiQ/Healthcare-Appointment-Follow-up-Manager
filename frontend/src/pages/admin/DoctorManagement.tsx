@@ -16,6 +16,10 @@ export default function DoctorManagement() {
   const [specialization, setSpecialization] = useState('');
   const [slotDuration, setSlotDuration] = useState(30);
   const [timezone, setTimezone] = useState('UTC');
+  const [departmentId, setDepartmentId] = useState('');
+  // A failure here only leaves the picker with No department; it is not worth an error banner.
+  const departmentsQuery = useAsync(() => api.adminListDepartments().catch(() => []), []);
+  const activeDepartments = (departmentsQuery.data ?? []).filter((d) => d.is_active);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +32,7 @@ export default function DoctorManagement() {
     setSpecialization('');
     setSlotDuration(30);
     setTimezone('UTC');
+    setDepartmentId('');
     setFieldErrors({});
     setSubmitError(null);
   }
@@ -62,6 +67,7 @@ export default function DoctorManagement() {
         specialization: specialization.trim(),
         slot_duration_minutes: slotDuration,
         timezone: timezone.trim() || 'UTC',
+        ...(departmentId ? { department_id: departmentId } : {}),
       });
       setNotice(`Created ${created.full_name}. Configure their working hours next.`);
       resetForm();
@@ -180,6 +186,16 @@ export default function DoctorManagement() {
                     <option key={zone} value={zone} />
                   ))}
                 </datalist>
+              </Field>
+              <Field label="Department" htmlFor="department" hint="Optional.">
+                <select id="department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} disabled={submitting}>
+                  <option value="">No department</option>
+                  {activeDepartments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
