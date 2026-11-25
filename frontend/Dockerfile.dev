@@ -1,0 +1,16 @@
+# Local development image for compose.yaml. Production is built and hosted by Vercel.
+FROM node:22-slim
+
+WORKDIR /app
+
+# Dependencies first, so editing code doesn't reinstall them. Same command as CI.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+# compose.yaml mounts ./frontend over this (keeping node_modules), so edits reload live.
+COPY . .
+
+EXPOSE 5173
+
+# Inside a container the dev server must listen on every interface, not just localhost.
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

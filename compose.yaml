@@ -1,0 +1,79 @@
+# Local development only: the whole app with one command, on PostgreSQL like production.
+#
+#   docker compose up --build        # first run, or after changing dependencies
+#   docker compose run --rm backend python -m scripts.seed_demo   # demo accounts (once)
+#
+# Then open http://localhost:5173. See docs/local-setup.md, "Option: run everything with
+# Docker". Production (Render and Vercel) does not use this file.
+#
+# Every value below is a local development default: no secrets, nothing real. DEMO_MODE
+# replaces the AI, email and Google Calendar services with offline stand-ins.
+
+name: healthflow
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: healthcare_db
+      # No password: the database is reachable only from the other containers (no port is
+      # published to your computer), and it holds local demo data only.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d healthcare_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      ENVIRONMENT: development
+      DEMO_MODE: "True"
+      DATABASE_URL: postgresql://postgres@db:5432/healthcare_db
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      FRONTEND_BASE_URL: http://localhost:5173
+      # Reminder emails, calendar sync and expiring slot holds run inside the API process.
+      RUN_WORKERS_IN_PROCESS: "True"
+      # Bind-mounted files don't always send change events into the container (Docker
+      # Desktop on Windows, for example), so the reloader polls instead.
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      # The dev server proxies /api to the backend container.
+      VITE_DEV_API_TARGET: http://backend:8000
+      VITE_USE_POLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Keeps the container's own node_modules (built for Linux) instead of the host's.
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -111,6 +111,9 @@ Requires Python 3.12+ and Node 22 LTS (22.22+) or 24 LTS. **New here? Follow the
 step-by-step [local setup guide](docs/local-setup.md)**, which covers Windows, macOS and
 Linux, demo accounts and troubleshooting.
 
+**Only have Docker?** `docker compose up --build` starts the database, backend and frontend
+together on PostgreSQL; see [Option: run everything with Docker](docs/local-setup.md#option-run-everything-with-docker).
+
 ```bash
 # Backend
 cd backend

@@ -188,6 +188,51 @@ Then follow [CONTRIBUTING.md](../CONTRIBUTING.md) to make your change and open a
 
 ---
 
+## Option: run everything with Docker
+
+If you have [Docker](https://docs.docker.com/get-docker/) (Docker Desktop, or Docker Engine
+with the Compose plugin), you can skip installing Python and Node and steps 3 and 4 above.
+`compose.yaml` in the repository root starts three containers: PostgreSQL 16 (as in
+production), the backend and the frontend.
+
+1. From the repository root, start everything. The first run builds the images and takes a
+   few minutes:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   The backend waits for the database, runs `alembic upgrade head`, then starts on port 8000.
+   The frontend starts on port 5173 once the backend is healthy.
+
+2. In a second terminal, create the demo accounts (once; running it again is safe):
+
+   ```bash
+   docker compose run --rm backend python -m scripts.seed_demo
+   ```
+
+3. Open http://localhost:5173 and sign in with the accounts from step 3, then carry on from
+   step 5.
+
+Good to know:
+
+- **Code changes reload by themselves.** `backend` and `frontend` are mounted into the
+  containers. Rebuild (`docker compose up --build -V`) only after changing
+  `requirements.txt`, `constraints.txt`, `package.json` or `package-lock.json`; `-V` replaces
+  the container's `node_modules` with the newly installed one.
+- **Settings** are in `compose.yaml`, with `DEMO_MODE=True` and no secrets. Variables set there
+  win over a `backend/.env` file, which applies only to the settings `compose.yaml` leaves out.
+- **Background jobs** (reminders, calendar sync, expiring holds) run inside the API, and demo
+  emails are written to the backend's log: `docker compose logs -f backend`.
+- **Tests** still run outside Docker as in step 6, or inside it with
+  `docker compose run --rm backend python -m pytest` (the tests use their own SQLite database).
+- **Stop** with `Ctrl+C` or `docker compose down`. The database is kept in the `pgdata` volume;
+  `docker compose down --volumes` deletes it for a fresh start.
+- **A port is already in use:** stop whatever uses 5173 or 8000, or change the left-hand
+  number under `ports:` in `compose.yaml`.
+
+This is for local development only. The real deployment (Render and Vercel) doesn't use it.
+
 ## Optional: use PostgreSQL locally
 
 SQLite is enough for almost every issue. Use PostgreSQL only when an issue involves locking,

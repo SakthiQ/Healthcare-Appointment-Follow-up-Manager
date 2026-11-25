@@ -1,0 +1,12 @@
+# Kept out of the local development image (compose.yaml).
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example
