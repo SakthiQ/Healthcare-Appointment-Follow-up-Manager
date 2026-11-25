@@ -17,11 +17,14 @@ class Doctor(Base):
     # in. Appointments themselves are absolute instants, always stored in UTC.
     timezone = Column(String(64), nullable=False, default="UTC", server_default="UTC")
     is_active = Column(Boolean, nullable=False, default=True)
+    # Optional: doctors work without a department.
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user = relationship("User", back_populates="doctor_profile")
+    department = relationship("Department", back_populates="doctors")
     working_hours = relationship("DoctorWorkingHours", back_populates="doctor", cascade="all, delete-orphan")
     leaves = relationship("DoctorLeave", back_populates="doctor", cascade="all, delete-orphan")
     appointments = relationship("Appointment", foreign_keys="Appointment.doctor_profile_id", back_populates="doctor")

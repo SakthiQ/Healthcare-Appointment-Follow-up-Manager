@@ -14,6 +14,7 @@ from models.appointment import AppointmentStatus
 from models.notification import NotificationType
 from models.user import UserRole
 from models.doctor import Doctor
+from services.department_service import department_service
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,16 @@ class DoctorService:
             slot_duration_minutes=doctor.slot_duration_minutes,
             timezone=doctor.timezone or "UTC",
             is_active=doctor.is_active,
-            created_at=doctor.created_at
+            created_at=doctor.created_at,
+            department_id=doctor.department_id,
+            department_name=doctor.department.name if doctor.department else None,
         )
 
     def create_doctor(self, db: Session, req: DoctorCreateRequest) -> DoctorResponse:
         existing = user_repository.get_by_email(db, req.email)
         if existing:
             raise ConflictError("A user with this email already exists.")
+        department_service.check_assignable(db, req.department_id)
 
         hashed_pw = hash_password(req.password)
         user = user_repository.create(
@@ -56,6 +60,10 @@ class DoctorService:
             slot_duration=req.slot_duration_minutes,
             timezone=req.timezone,
         )
+        if req.department_id:
+            doctor.department_id = req.department_id
+            db.commit()
+            db.refresh(doctor)
 
         return self._to_response(doctor)
 
@@ -65,11 +73,16 @@ class DoctorService:
         doctor = doctor_repository.get_by_id(db, doctor_id, with_for_update=changing_status)
         if not doctor:
             raise NotFoundError("Doctor not found.")
+        changing_department = "department_id" in req.model_fields_set
+        if changing_department:
+            department_service.check_assignable(db, req.department_id)
 
         try:
             conflicted_ids = (
                 self._apply_active_status_no_commit(db, doctor, req.is_active) if changing_status else []
             )
+            if changing_department:
+                doctor.department_id = req.department_id
             # Commits the status change (and everything it touched) with the other fields.
             updated_doctor = doctor_repository.update_doctor(
                 db=db,
@@ -169,9 +182,10 @@ class DoctorService:
 
     def search_doctors(
         self, db: Session, specialization: Optional[str] = None, active_only: bool = True,
-        include_private: bool = False, name: Optional[str] = None,
+        include_private: bool = False, name: Optional[str] = None, department_id: Optional[str] = None,
     ) -> List[DoctorResponse]:
-        doctors = doctor_repository.search(db, specialization=specialization, active_only=active_only, name=name)
+        doctors = doctor_repository.search(db, specialization=specialization, active_only=active_only, name=name,
+                                           department_id=department_id)
         return [self._to_response(d, include_private=include_private) for d in doctors]
 
 

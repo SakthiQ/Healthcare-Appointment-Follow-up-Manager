@@ -26,6 +26,7 @@ def _is_admin(user: Optional[User]) -> bool:
 def search_doctors(
     specialization: Optional[str] = Query(default=None, max_length=100, description="Filter doctors by specialization (part of it, any case)"),
     name: Optional[str] = Query(default=None, max_length=100, description="Filter doctors by name (part of it, any case)"),
+    department_id: Optional[str] = Query(default=None, max_length=36, description="Only doctors in this department"),
     current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
@@ -34,7 +35,8 @@ def search_doctors(
     so a deactivated one can still be found and reactivated."""
     is_admin = _is_admin(current_user)
     return doctor_service.search_doctors(
-        db, specialization=specialization, name=name, active_only=not is_admin, include_private=is_admin
+        db, specialization=specialization, name=name, active_only=not is_admin, include_private=is_admin,
+        department_id=department_id,
     )
 
 

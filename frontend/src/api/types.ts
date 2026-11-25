@@ -44,6 +44,8 @@ export interface Doctor {
   timezone: string;
   is_active: boolean;
   created_at: string;
+  department_id?: string | null;
+  department_name?: string | null;
 }
 
 /** GET /admin/stats: dashboard counts computed in the database. */
@@ -277,4 +279,13 @@ export interface PatientProfile {
 export interface PatientHealth {
   age: number | null;
   allergies: string | null;
+}
+
+/** A hospital department that groups doctors (GET /departments, /admin/departments). */
+export interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  active_doctor_count: number;
 }

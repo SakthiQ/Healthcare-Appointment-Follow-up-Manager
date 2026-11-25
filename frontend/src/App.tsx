@@ -26,6 +26,7 @@ import DoctorSchedule from './pages/doctor/DoctorSchedule';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import DoctorManagement from './pages/admin/DoctorManagement';
+import Departments from './pages/admin/Departments';
 import DoctorConfig from './pages/admin/DoctorConfig';
 import ConflictedAppointments from './pages/admin/ConflictedAppointments';
 import AuditLog from './pages/admin/AuditLog';
@@ -159,6 +160,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ADMIN']}>
                 <DoctorManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/departments"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <Departments />
               </ProtectedRoute>
             }
           />

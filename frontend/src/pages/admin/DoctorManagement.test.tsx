@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../../api/client';
 import type { Doctor } from '../../api/types';
 import DoctorManagement from './DoctorManagement';
@@ -44,6 +44,10 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('DoctorManagement', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'adminListDepartments').mockResolvedValue([]);
+  });
+
   it('lists active and inactive doctors, each linking to its configuration page', async () => {
     const search = vi.spyOn(api, 'searchDoctors').mockResolvedValue([
       doctor(),

@@ -18,9 +18,11 @@ from models.security import LoginThrottle, RateLimit, AuthToken, AuthTokenPurpos
 from models.audit import AuditLog
 from models.invitation import Invitation
 from models.patient_profile import PatientProfile
+from models.department import Department
 
 __all__ = [
     "Base",
+    "Department",
     "PatientProfile",
     "User",
     "UserRole",

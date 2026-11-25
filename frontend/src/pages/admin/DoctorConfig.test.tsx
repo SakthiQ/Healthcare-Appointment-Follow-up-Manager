@@ -31,6 +31,7 @@ const leave: DoctorLeave = {
 };
 
 function mockReads(doc = doctor()) {
+  vi.spyOn(api, 'adminListDepartments').mockResolvedValue([]);
   vi.spyOn(api, 'getDoctor').mockResolvedValue(doc);
   vi.spyOn(api, 'getDoctorSchedule').mockResolvedValue([monday]);
   vi.spyOn(api, 'getDoctorLeaves').mockResolvedValue([leave]);
