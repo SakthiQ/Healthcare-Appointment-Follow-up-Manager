@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import ValidationError as PydanticValidationError
 
 from app.config import settings
-from app.core.datetime_utils import ensure_utc
+from app.core.datetime_utils import ensure_utc, get_zone
 from app.exceptions import NotFoundError, ForbiddenError, ValidationError, ConflictError, TooManyRequestsError
 from models.user import User, UserRole
 from models.appointment import AppointmentStatus
@@ -14,12 +14,13 @@ from models.clinical import AISummary, AISummaryType, AISummaryStatus
 from models.notification import NotificationType
 from repositories.appointment_repository import appointment_repository
 from repositories.clinical_repository import clinical_repository
-from providers.ai_provider import AIProvider, AIProviderError, PrescribedMedication, get_ai_provider
+from providers.ai_provider import AIProvider, AIProviderError, PastVisit, PrescribedMedication, get_ai_provider
 from services.notification_service import notification_service
 from services.reminder_service import reminder_service
 from schemas.ai import (
     PreVisitAIOutput,
     PostVisitAIOutput,
+    HistoryAIOutput,
     SymptomReportResponse,
     AISummaryResponse,
     ConsultationResponse,
@@ -35,6 +36,37 @@ CONSULTABLE_STATUSES = {
     AppointmentStatus.RESCHEDULED,
     AppointmentStatus.COMPLETED,
 }
+
+# The history summary reads at most this many earlier visits, and this much of each visit's
+# notes, so the prompt stays a sensible size however long the patient's record is.
+HISTORY_MAX_VISITS = 10
+HISTORY_MAX_NOTES_CHARS = 2000
+
+# Stored without calling the provider when the patient has no earlier completed visits.
+NO_HISTORY_OUTPUT = {
+    "recent_visits": [],
+    "recurring_issues": [],
+    "notes_for_doctor": "No previous completed visits with this clinic.",
+}
+
+
+def _authorize_clinician(appointment, user: User) -> None:
+    """The appointment's own doctor, or an admin. Patients are refused."""
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role == UserRole.DOCTOR and appointment.doctor_id == user.id:
+        return
+    raise ForbiddenError("Only the appointment's doctor or an admin can access the history summary.")
+
+
+def _history_mismatch(output: HistoryAIOutput, visits: Sequence[PastVisit]) -> Optional[str]:
+    """The prompt tells the LLM to summarise only the visits it was given. Reject a summary
+    that lists a visit on a date it was not given, rather than show the doctor an invented one."""
+    known = {v.date for v in visits}
+    invented = sorted({v.date.isoformat() for v in output.recent_visits} - known)
+    if invented:
+        return "AI history summary lists visits that are not in the records (" + ", ".join(invented) + ")."
+    return None
 
 
 def _authorize_appointment_participant(appointment, user: User) -> None:
@@ -302,6 +334,55 @@ class AIService:
             raise NotFoundError("No post-visit summary has been generated for this appointment yet.")
         return _summary_response(summary, user)
 
+    # --- History summary (#73): the patient's earlier visits, for their doctor ---
+    def generate_history_summary(self, db: Session, appointment_id: str, user: User) -> AISummaryResponse:
+        appointment = appointment_repository.get_by_id(db, appointment_id)
+        if not appointment:
+            raise NotFoundError("Appointment not found.")
+        _authorize_clinician(appointment, user)
+
+        rows = clinical_repository.previous_consultations(
+            db, appointment.patient_id, before=appointment.start_time,
+            exclude_appointment_id=appointment.id, limit=HISTORY_MAX_VISITS,
+        )
+        # Read everything the provider needs now: see generate_pre_visit_summary.
+        visits = []
+        for row in rows:
+            zone = get_zone(row.doctor.timezone if row.doctor else None)
+            prescription = row.consultation.prescription
+            visits.append(PastVisit(
+                date=ensure_utc(row.start_time).astimezone(zone).date().isoformat(),
+                notes=row.consultation.notes[:HISTORY_MAX_NOTES_CHARS],
+                medications=tuple(
+                    PrescribedMedication(name=m.name, dosage=m.dosage, frequency=m.frequency,
+                                         duration_days=m.duration_days)
+                    for m in (prescription.medications if prescription else [])
+                ),
+                instructions=prescription.instructions if prescription else None,
+            ))
+
+        summary = self._run_generation(
+            db=db,
+            appointment_id=appointment_id,
+            summary_type=AISummaryType.HISTORY,
+            output_model=HistoryAIOutput,
+            # No earlier visits: nothing to summarise, so don't ask the model to.
+            call=lambda provider: provider.generate_history_summary(visits) if visits else dict(NO_HISTORY_OUTPUT),
+            verify=lambda output: _history_mismatch(output, visits),
+        )
+        return AISummaryResponse.model_validate(summary)
+
+    def get_history_summary(self, db: Session, appointment_id: str, user: User) -> AISummaryResponse:
+        appointment = appointment_repository.get_by_id(db, appointment_id)
+        if not appointment:
+            raise NotFoundError("Appointment not found.")
+        _authorize_clinician(appointment, user)
+
+        summary = clinical_repository.get_latest_ai_summary(db, appointment_id, AISummaryType.HISTORY)
+        if not summary:
+            raise NotFoundError("No history summary has been generated for this appointment yet.")
+        return AISummaryResponse.model_validate(summary)
+
     # --- Shared generation + graceful-failure pipeline ---
     def _run_generation(
         self, db: Session, appointment_id: str, summary_type: AISummaryType, output_model, call,
@@ -351,7 +432,7 @@ class AIService:
 
         return clinical_repository.create_ai_summary(
             db, appointment_id, summary_type, AISummaryStatus.SUCCESS,
-            payload=validated.model_dump()
+            payload=validated.model_dump(mode="json")
         )
 
 

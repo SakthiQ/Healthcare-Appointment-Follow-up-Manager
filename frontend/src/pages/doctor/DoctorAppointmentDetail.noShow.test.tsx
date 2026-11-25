@@ -25,6 +25,7 @@ function renderPage(appointment: Appointment) {
   vi.spyOn(api, 'getPreVisitSummary').mockRejectedValue(notFound());
   vi.spyOn(api, 'getConsultation').mockRejectedValue(notFound());
   vi.spyOn(api, 'getPostVisitSummary').mockRejectedValue(notFound());
+  vi.spyOn(api, 'getHistorySummary').mockRejectedValue(notFound());
   return render(
     <MemoryRouter initialEntries={['/doctor/appointments/a1']}>
       <Routes>

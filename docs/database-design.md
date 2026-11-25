@@ -98,7 +98,7 @@ erDiagram
     AISummary {
         string id PK "UUID str"
         string appointment_id FK
-        enum type "PRE_VISIT | POST_VISIT"
+        enum type "PRE_VISIT | POST_VISIT | HISTORY"
         enum status "PENDING | SUCCESS | FAILED"
         json payload
         text error_message

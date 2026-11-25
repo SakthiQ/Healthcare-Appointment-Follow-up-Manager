@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Literal, Any, Dict
 from pydantic import BaseModel, ConfigDict, Field
 from models.clinical import AISummaryType, AISummaryStatus
@@ -17,6 +17,19 @@ class PostVisitAIOutput(BaseModel):
     summary: str = Field(..., min_length=1)
     medication_schedule: str = Field(..., min_length=1)
     follow_up_steps: str = Field(..., min_length=1)
+
+
+class HistoryVisitOutput(BaseModel):
+    date: date
+    complaint: str = Field(..., min_length=1, max_length=500)
+    medications: List[str] = Field(default_factory=list, max_length=20)
+
+
+class HistoryAIOutput(BaseModel):
+    """Contract for the history summary (#73): the doctor-facing digest of earlier visits."""
+    recent_visits: List[HistoryVisitOutput] = Field(..., max_length=10)
+    recurring_issues: List[str] = Field(..., max_length=10)
+    notes_for_doctor: str = Field(..., min_length=1, max_length=2000)
 
 
 class SymptomReportCreateRequest(BaseModel):

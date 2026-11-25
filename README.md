@@ -344,7 +344,7 @@ The full ERD, state machines and constraints are in `docs/database-design.md`. C
 read only by the patient, the appointment's doctor and admins, and audited), `NotificationJob`,
 `CalendarEvent`, plus `AuthToken` (password-reset and
 verification links), `Invitation` (staff signup links), `AuditLog`, `RateLimit` and
-`LoginThrottle`. The schema comes entirely from migrations: 15 Alembic revisions in
+`LoginThrottle`. The schema comes entirely from migrations: 16 Alembic revisions in
 `backend/alembic/versions/`, which CI applies to an empty database.
 
 The appointment state machine is `HELD → CONFIRMED → {RESCHEDULED, CANCELLED,
@@ -364,7 +364,11 @@ These prompts come word for word from the original project brief and are impleme
 **Post-visit.** The output must match `{summary, medication_schedule, follow_up_steps}`:
 > Convert these clinical notes into a patient-friendly summary with medication schedule and follow-up steps: `{notes}`
 
-Both come with a system prompt that tells the model to return only JSON of exactly that
+**History** (#73, our own wording, for the appointment's doctor). The output must match
+`{recent_visits: [{date, complaint, medications}], recurring_issues, notes_for_doctor}`:
+> Summarise this patient's previous visits to the clinic for their doctor: for each visit, the date, the complaint and the medications prescribed; then any issues that come up at more than one visit. Use only what is written below. Previous visits, newest first: `{visits}`
+
+Each comes with a system prompt that tells the model to return only JSON of exactly that
 shape, with no diagnosis and no text outside the JSON. Every response, real or mock, is
 checked against a Pydantic schema before it is used. A malformed or invalid response is
 recorded as `AISummaryStatus.FAILED` and never raises an error past the API boundary. The full
