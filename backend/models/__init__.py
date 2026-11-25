@@ -19,9 +19,11 @@ from models.audit import AuditLog
 from models.invitation import Invitation
 from models.patient_profile import PatientProfile
 from models.department import Department
+from models.waitlist import WaitlistEntry
 
 __all__ = [
     "Base",
+    "WaitlistEntry",
     "Department",
     "PatientProfile",
     "User",

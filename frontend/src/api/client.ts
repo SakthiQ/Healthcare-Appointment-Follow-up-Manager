@@ -27,6 +27,7 @@ import type {
   PatientProfile,
   PatientHealth,
   Department,
+  WaitlistEntry,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -321,6 +322,11 @@ export const api = {
   },
 
   getDoctor: (doctorId: string) => get<Doctor>(`/doctors/${doctorId}`),
+
+  /** Wait for a slot on a fully booked future day (patients). */
+  joinWaitlist: (doctorId: string, date: string) => post<WaitlistEntry>(`/doctors/${doctorId}/waitlist`, { date }),
+  leaveWaitlist: (doctorId: string, date: string) => del<void>(`/doctors/${doctorId}/waitlist?date=${date}`),
+  getMyWaitlist: () => get<WaitlistEntry[]>('/patients/me/waitlist'),
 
   /** Active departments with their active-doctor counts (public). */
   listDepartments: () => get<Department[]>('/departments'),

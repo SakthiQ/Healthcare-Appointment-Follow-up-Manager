@@ -289,3 +289,14 @@ export interface Department {
   is_active: boolean;
   active_doctor_count: number;
 }
+
+/** A waitlist for one doctor and one fully booked day (GET /patients/me/waitlist). */
+export interface WaitlistEntry {
+  id: string;
+  doctor_id: string;
+  date: string;
+  created_at: string;
+  notified_at: string | null;
+  doctor_name: string | null;
+  doctor_specialization: string | null;
+}

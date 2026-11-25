@@ -237,6 +237,19 @@ class NotificationService:
                 view.link, "See your prescription",
             )
 
+        if job.notification_type == NotificationType.WAITLIST_SLOT_OPEN:
+            doctor = payload.get("doctor_name") or "your doctor"
+            day = payload.get("date", "the day you asked for")
+            return render_email(
+                "A slot has opened up",
+                [
+                    f"A slot is now free with {doctor} on {day}.",
+                    "Everyone on the waitlist for that day was told at the same time, and the first "
+                    "person to book gets it. Book soon if you still want it.",
+                ],
+                f"{_frontend_base()}/patient/doctors/{payload.get('doctor_id', '')}", "Book a slot",
+            )
+
         if job.notification_type == NotificationType.PASSWORD_RESET:
             link = payload.get("link")
             if not link:

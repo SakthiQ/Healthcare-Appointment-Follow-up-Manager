@@ -18,6 +18,7 @@ from services.hold_service import hold_service
 from services.notification_service import notification_service
 from services.reminder_service import reminder_service
 from services.calendar_service import calendar_service
+from services.waitlist_service import local_date, waitlist_service
 from schemas.appointment import (
     AppointmentCreateRequest,
     AppointmentRescheduleRequest,
@@ -233,6 +234,15 @@ class AppointmentService:
         except Exception:
             _abandon_failed_side_effect(db, appt, "queue reschedule notifications")
 
+    def _safe_notify_waitlist(self, db: Session, appt: Appointment, freed_start: datetime) -> None:
+        """A slot on the day of `freed_start` may have opened up: tell that day's waitlist.
+        After the commit and best effort, so it can never undo the cancel or reschedule."""
+        try:
+            if appt.doctor is not None:
+                waitlist_service.safe_notify(db, appt.doctor_profile_id, local_date(appt.doctor, freed_start))
+        except Exception:
+            logger.exception("Could not check the waitlist after appointment %s changed", appt.id)
+
     def _safe_queue_cancellation_notifications(self, db: Session, appt: Appointment) -> None:
         try:
             # An unsent confirmation would otherwise go out for an appointment
@@ -313,6 +323,7 @@ class AppointmentService:
         )
         response = AppointmentResponse.model_validate(updated_appt)
         self._safe_queue_reschedule_notifications(db, updated_appt, previous_start)
+        self._safe_notify_waitlist(db, updated_appt, previous_start)
         self._safe_sync_calendar(db, updated_appt, "rescheduled")
         return response
 
@@ -339,6 +350,7 @@ class AppointmentService:
         )
         response = AppointmentResponse.model_validate(cancelled_appt)
         self._safe_queue_cancellation_notifications(db, cancelled_appt)
+        self._safe_notify_waitlist(db, cancelled_appt, cancelled_appt.start_time)
         self._safe_sync_calendar(db, cancelled_appt, "cancelled")
         return response
 

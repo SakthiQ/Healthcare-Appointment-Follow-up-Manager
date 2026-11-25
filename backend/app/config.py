@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR: int = 3   # ...and per target email, so an inbox can't be flooded
     AUTH_TOKEN_RATE_LIMIT_PER_HOUR: int = 30            # reset-password / verify-email submissions, per IP
     CHANGE_PASSWORD_RATE_LIMIT_PER_HOUR: int = 10       # per signed-in user
+    WAITLIST_RATE_LIMIT_PER_HOUR: int = 20              # waitlist joins, per signed-in patient
     AI_RATE_LIMIT_PER_HOUR: int = 30                    # AI summary generations, per signed-in user
 
     # Account emails (password reset, email verification). Links point at the frontend.
@@ -182,6 +183,9 @@ class Settings(BaseSettings):
     # Slot holds one patient may have at once. A patient booking one appointment needs
     # one; without a cap a single account could hold every free slot of every doctor.
     MAX_ACTIVE_HOLDS_PER_PATIENT: int = 2
+
+    # Waitlists one patient may be on at once (one per doctor and day).
+    MAX_ACTIVE_WAITLIST_PER_PATIENT: int = 5
 
     # Comma-separated list of origins allowed to call the API cross-origin
     # (the deployed frontend's origin(s) in production). Defaults cover local
