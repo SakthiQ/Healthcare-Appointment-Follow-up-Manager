@@ -426,6 +426,12 @@ export const api = {
   getPostVisitSummary: (appointmentId: string) =>
     get<AISummary>(`/appointments/${appointmentId}/ai/post-visit-summary`),
 
+  generateHistorySummary: (appointmentId: string) =>
+    post<AISummary>(`/appointments/${appointmentId}/ai/history-summary`),
+
+  getHistorySummary: (appointmentId: string) =>
+    get<AISummary>(`/appointments/${appointmentId}/ai/history-summary`),
+
   // --- Consultation ---
   submitConsultation: (
     appointmentId: string,

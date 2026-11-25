@@ -12,7 +12,7 @@ export type AppointmentStatus =
   | 'COMPLETED'
   | 'NO_SHOW';
 
-export type AISummaryType = 'PRE_VISIT' | 'POST_VISIT';
+export type AISummaryType = 'PRE_VISIT' | 'POST_VISIT' | 'HISTORY';
 export type AISummaryStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
 
 export interface User {
@@ -139,12 +139,19 @@ export interface PostVisitPayload {
   follow_up_steps: string;
 }
 
+/** The doctor-facing summary of a patient's earlier visits (#73). Dates are YYYY-MM-DD. */
+export interface HistoryPayload {
+  recent_visits: { date: string; complaint: string; medications: string[] }[];
+  recurring_issues: string[];
+  notes_for_doctor: string;
+}
+
 export interface AISummary {
   id: string;
   appointment_id: string;
   type: AISummaryType;
   status: AISummaryStatus;
-  payload: PreVisitPayload | PostVisitPayload | null;
+  payload: PreVisitPayload | PostVisitPayload | HistoryPayload | null;
   error_message: string | null;
   created_at: string;
 }

@@ -105,3 +105,32 @@ def get_post_visit_summary(
     result = ai_service.get_post_visit_summary(db, appointment_id, user=current_user)
     audit_service.record_appointment_access(db, "ai.post_visit.view", current_user, appointment_id)
     return result
+
+
+@router.post("/ai/history-summary", response_model=AISummaryResponse, status_code=status.HTTP_200_OK)
+def generate_history_summary(
+    appointment_id: str,
+    current_user: User = Depends(rate_limited_per_user(
+        "ai-generate", "AI_RATE_LIMIT_PER_HOUR", roles=(UserRole.DOCTOR, UserRole.ADMIN))),
+    db: Session = Depends(get_db)
+):
+    """Generate (or regenerate) an AI summary of the patient's earlier completed visits, for
+    the appointment's doctor or an admin. Limited per user per hour, on top of the
+    per-appointment cap. Audited with the patient's id."""
+    result = ai_service.generate_history_summary(db, appointment_id, user=current_user)
+    audit_service.record_appointment_access(
+        db, "ai.history.generate", current_user, appointment_id, detail={"status": result.status.value}
+    )
+    return result
+
+
+@router.get("/ai/history-summary", response_model=AISummaryResponse, status_code=status.HTTP_200_OK)
+def get_history_summary(
+    appointment_id: str,
+    current_user: User = Depends(require_role(UserRole.DOCTOR, UserRole.ADMIN)),
+    db: Session = Depends(get_db)
+):
+    """Retrieve the latest history summary (the appointment's doctor or an admin)."""
+    result = ai_service.get_history_summary(db, appointment_id, user=current_user)
+    audit_service.record_appointment_access(db, "ai.history.view", current_user, appointment_id)
+    return result

@@ -5,6 +5,7 @@ import type { MedicationItem, PostVisitPayload, PreVisitPayload } from '../../ap
 import { useAsync } from '../../lib/useAsync';
 import { AddToCalendarButton } from '../../components/AddToCalendarButton';
 import { PatientHealthCard } from '../../components/PatientHealthCard';
+import { PreviousVisitsCard } from '../../components/PreviousVisitsCard';
 import { formatDateTime, urgencyTone } from '../../lib/format';
 import {
   Badge,
@@ -178,6 +179,8 @@ export default function DoctorAppointmentDetail() {
       <ErrorBanner error={noShowError} />
 
       <PatientHealthCard appointmentId={appt.id} />
+
+      <PreviousVisitsCard appointmentId={appt.id} />
 
       <Card title="Appointment">
         <div className="summary-row">

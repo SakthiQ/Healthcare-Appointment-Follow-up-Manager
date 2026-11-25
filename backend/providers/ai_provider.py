@@ -1,5 +1,5 @@
 """
-AI provider abstraction for pre-visit and post-visit summary generation.
+AI provider abstraction for pre-visit, post-visit and history summary generation.
 
 Prompt templates are taken verbatim from the LLM Usage Guidance in the original
 project brief. They are reproduced in the README and docs/ai-design.md, so the
@@ -56,6 +56,28 @@ POST_VISIT_SYSTEM_PROMPT = (
     "prescribed, say so."
 )
 
+# The history summary (#73) is not in the original brief, so its prompt is our own. It is
+# reproduced in docs/ai-design.md.
+HISTORY_PROMPT_TEMPLATE = (
+    "Summarise this patient's previous visits to the clinic for their doctor: for each "
+    "visit, the date, the complaint and the medications prescribed; then any issues that "
+    "come up at more than one visit. Use only what is written below.\n\n"
+    "Previous visits, newest first:\n{visits}"
+)
+
+HISTORY_SYSTEM_PROMPT = (
+    "You are a clinical records assistant helping a doctor prepare for a visit. Given notes "
+    "from a patient's previous visits, respond with ONLY a JSON object of the exact shape: "
+    '{"recent_visits": [{"date": "YYYY-MM-DD", "complaint": "string", '
+    '"medications": ["string"]}], "recurring_issues": ["string"], '
+    '"notes_for_doctor": "string"}. '
+    "List the visits newest first, with each date exactly as given. Summarise only what is "
+    "written in the notes: do not diagnose, do not suggest new treatment or advice, and do "
+    "not add anything the notes do not say. List medications exactly as prescribed. If there "
+    "are no recurring issues, return an empty list. Do not include any text outside the "
+    "JSON object."
+)
+
 
 @dataclass(frozen=True)
 class PrescribedMedication:
@@ -79,6 +101,27 @@ def format_prescription(
     if instructions and instructions.strip():
         lines.append(f"Instructions: {instructions.strip()}")
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class PastVisit:
+    """One earlier completed visit, as given to the history summary."""
+    date: str  # ISO date (YYYY-MM-DD) in the clinic's local time
+    notes: str
+    medications: Sequence[PrescribedMedication] = ()
+    instructions: Optional[str] = None
+
+
+def format_visits(visits: Sequence[PastVisit]) -> str:
+    """Plain-text list of previous visits given to the LLM."""
+    blocks = []
+    for visit in visits:
+        meds = "; ".join(m.describe() for m in visit.medications) or "None"
+        block = f"Visit on {visit.date}\nNotes: {visit.notes.strip()}\nMedications: {meds}"
+        if visit.instructions and visit.instructions.strip():
+            block += f"\nInstructions: {visit.instructions.strip()}"
+        blocks.append(block)
+    return "\n\n".join(blocks)
 
 
 class AIProviderError(Exception):
@@ -113,6 +156,11 @@ class AIProvider(abc.ABC):
         prescription_instructions: Optional[str] = None,
     ) -> Dict[str, Any]:
         ...
+
+    def generate_history_summary(self, visits: Sequence[PastVisit]) -> Dict[str, Any]:
+        """Not abstract, so providers written before #73 keep working: they simply record
+        a FAILED history summary."""
+        raise AIProviderUnavailableError("This AI provider does not support history summaries.")
 
 
 class MockAIProvider(AIProvider):
@@ -163,6 +211,24 @@ class MockAIProvider(AIProvider):
             "summary": f"Here is a summary of your visit: {notes_text}",
             "medication_schedule": schedule,
             "follow_up_steps": "Follow up with your doctor if symptoms persist or worsen. Attend any scheduled follow-up appointment.",
+        }
+
+    def generate_history_summary(self, visits: Sequence[PastVisit]) -> Dict[str, Any]:
+        counts: Dict[str, int] = {}
+        for visit in visits:
+            for name in {m.name.strip().lower(): m.name.strip() for m in visit.medications}.values():
+                counts[name] = counts.get(name, 0) + 1
+        return {
+            "recent_visits": [
+                {
+                    "date": visit.date,
+                    "complaint": (visit.notes or "").strip().splitlines()[0][:200] if (visit.notes or "").strip() else "Not recorded",
+                    "medications": [m.describe() for m in visit.medications],
+                }
+                for visit in visits
+            ],
+            "recurring_issues": [f"{name} prescribed at {n} visits" for name, n in counts.items() if n > 1],
+            "notes_for_doctor": f"{len(visits)} previous visit{'s' if len(visits) != 1 else ''} summarised from the clinic's records.",
         }
 
 
@@ -238,6 +304,10 @@ class RealAIProvider(AIProvider):
             prescription=format_prescription(medications, prescription_instructions)
         )
         return self._chat_completion(POST_VISIT_SYSTEM_PROMPT, prompt)
+
+    def generate_history_summary(self, visits: Sequence[PastVisit]) -> Dict[str, Any]:
+        prompt = HISTORY_PROMPT_TEMPLATE.format(visits=format_visits(visits))
+        return self._chat_completion(HISTORY_SYSTEM_PROMPT, prompt)
 
 
 def get_ai_provider() -> AIProvider:

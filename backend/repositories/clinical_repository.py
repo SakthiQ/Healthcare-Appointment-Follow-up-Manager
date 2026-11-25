@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.exceptions import ConflictError
+from models.appointment import Appointment, AppointmentStatus
 from models.clinical import (
     SymptomReport,
     AISummary,
@@ -77,6 +79,31 @@ class ClinicalRepository:
         )
 
     # --- Consultations / Prescriptions / Medications ---
+    def previous_consultations(
+        self, db: Session, patient_id: str, before: datetime, exclude_appointment_id: str, limit: int
+    ) -> List[Appointment]:
+        """The patient's completed visits with a recorded consultation that started before
+        `before`, newest first, with consultations, prescriptions and doctors preloaded."""
+        return (
+            db.query(Appointment)
+            .join(Consultation, Consultation.appointment_id == Appointment.id)
+            .filter(
+                Appointment.patient_id == patient_id,
+                Appointment.status == AppointmentStatus.COMPLETED,
+                Appointment.start_time < before,
+                Appointment.id != exclude_appointment_id,
+            )
+            .options(
+                selectinload(Appointment.doctor),
+                selectinload(Appointment.consultation)
+                .selectinload(Consultation.prescription)
+                .selectinload(Prescription.medications),
+            )
+            .order_by(Appointment.start_time.desc(), Appointment.id.desc())
+            .limit(limit)
+            .all()
+        )
+
     def get_consultation(self, db: Session, appointment_id: str) -> Optional[Consultation]:
         return db.query(Consultation).filter(Consultation.appointment_id == appointment_id).first()
 

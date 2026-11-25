@@ -10,6 +10,7 @@ from app.database import Base
 class AISummaryType(str, enum.Enum):
     PRE_VISIT = "PRE_VISIT"
     POST_VISIT = "POST_VISIT"
+    HISTORY = "HISTORY"  # a patient's previous visits, for their doctor (#73)
 
 
 class AISummaryStatus(str, enum.Enum):
