@@ -5,6 +5,7 @@ import type { AISummary, Appointment, Hold, PreVisitPayload, SlotItem } from '..
 import { useAsync } from '../../lib/useAsync';
 import { useNow } from '../../lib/useNow';
 import { JoinWaitlistButton } from '../../components/Waitlist';
+import { useT } from '../../i18n/I18n';
 import {
   bookableSlots,
   DAY_NAMES,
@@ -30,6 +31,7 @@ import {
 type Step = 'slot' | 'symptoms' | 'done';
 
 export default function BookAppointment() {
+  const t = useT();
   const { doctorId = '' } = useParams();
   const navigate = useNavigate();
 
@@ -126,7 +128,7 @@ export default function BookAppointment() {
   async function handleConfirm() {
     if (!hold) return;
     if (symptoms.trim().length < 3) {
-      setSymptomError('Please describe your symptoms (at least 3 characters).');
+      setSymptomError(t('book.symptomsTooShort'));
       return;
     }
     setSymptomError(undefined);
@@ -170,13 +172,13 @@ export default function BookAppointment() {
     }
   }
 
-  if (doctorQuery.loading) return <Spinner label="Loading doctor…" />;
+  if (doctorQuery.loading) return <Spinner label={t('book.loadingDoctor')} />;
   if (doctorQuery.error)
     return (
       <div className="page">
         <ErrorBanner error={doctorQuery.error} onRetry={doctorQuery.reload} />
         <Link className="btn" to="/patient/doctors">
-          Back to search
+          {t('book.backToSearch')}
         </Link>
       </div>
     );
@@ -187,32 +189,32 @@ export default function BookAppointment() {
     return (
       <div className="page">
         <header className="page-head">
-          <h1>Appointment confirmed</h1>
+          <h1>{t('book.confirmed')}</h1>
         </header>
 
         <SuccessBanner>
           <div>
-            <strong>You're booked with {doctor?.full_name}</strong>
+            <strong>{t('book.bookedWith', { doctor: doctor?.full_name ?? '' })}</strong>
             <div>{formatDateTime(appointment.start_time, appointment.doctor_timezone)}</div>
           </div>
         </SuccessBanner>
 
-        <Card title="Your pre-visit summary">
+        <Card title={t('book.summaryTitle')}>
           {preVisit?.status === 'SUCCESS' && payload ? (
             <>
               <p className="muted small">
-                Shared with your doctor before the visit so they can prepare.
+                {t('book.summaryShared')}
               </p>
               <div className="summary-row">
-                <span>Urgency</span>
+                <span>{t('book.urgency')}</span>
                 <Badge tone={urgencyTone(payload.urgency)}>{payload.urgency}</Badge>
               </div>
               <div className="summary-row">
-                <span>Chief complaint</span>
+                <span>{t('book.chiefComplaint')}</span>
                 <strong>{payload.chief_complaint}</strong>
               </div>
               <div>
-                <span className="muted small">Questions to ask your doctor</span>
+                <span className="muted small">{t('book.questions')}</span>
                 <ol className="numbered">
                   {payload.suggested_questions.map((q, i) => (
                     <li key={i}>{q}</li>
@@ -222,9 +224,7 @@ export default function BookAppointment() {
             </>
           ) : (
             <InfoBanner>
-              The AI summary could not be generated right now
-              {preVisit?.error_message ? `: ${preVisit.error_message}` : '.'} Your appointment is
-              confirmed regardless — you can generate the summary later from the appointment page.
+              {t('book.summaryFailed', { reason: preVisit?.error_message ? `: ${preVisit.error_message}.` : '.' })}
             </InfoBanner>
           )}
         </Card>
@@ -235,10 +235,10 @@ export default function BookAppointment() {
             className="btn btn-primary"
             onClick={() => navigate(`/patient/appointments/${appointment.id}`)}
           >
-            View appointment
+            {t('book.viewAppointment')}
           </button>
           <Link className="btn" to="/patient/appointments">
-            All my appointments
+            {t('book.allAppointments')}
           </Link>
         </div>
       </div>
@@ -255,27 +255,27 @@ export default function BookAppointment() {
           </p>
         </div>
         <Link className="btn" to="/patient/doctors">
-          Back to search
+          {t('book.backToSearch')}
         </Link>
       </header>
 
-      <ol className="steps" aria-label="Booking progress">
-        <li className={step === 'slot' ? 'current' : 'complete'}>1. Choose a slot</li>
+      <ol className="steps" aria-label={t('book.progress')}>
+        <li className={step === 'slot' ? 'current' : 'complete'}>{t('book.step1')}</li>
         <li className={step === 'symptoms' ? 'current' : step === 'slot' ? '' : 'complete'}>
-          2. Describe symptoms
+          {t('book.step2')}
         </li>
-        <li>3. Confirm</li>
+        <li>{t('book.step3')}</li>
       </ol>
 
       {/* ---- Step 1: slot selection ---- */}
       {step === 'slot' ? (
         <>
-          <Card title="Weekly availability">
+          <Card title={t('book.weekly')}>
             {scheduleQuery.loading ? <Spinner /> : null}
             <ErrorBanner error={scheduleQuery.error} onRetry={scheduleQuery.reload} />
             {scheduleQuery.data ? (
               scheduleQuery.data.length === 0 ? (
-                <EmptyState>This doctor has no working hours configured yet.</EmptyState>
+                <EmptyState>{t('book.noHours')}</EmptyState>
               ) : (
                 <ul className="chips">
                   {scheduleQuery.data
@@ -290,11 +290,11 @@ export default function BookAppointment() {
             ) : null}
           </Card>
 
-          <Card title="Available slots">
+          <Card title={t('book.availableSlots')}>
             <ErrorBanner error={confirmError} />
             <ErrorBanner error={holdError} />
 
-            <Field label="Date" htmlFor="date">
+            <Field label={t('book.date')} htmlFor="date">
               <input
                 id="date"
                 type="date"
@@ -304,18 +304,14 @@ export default function BookAppointment() {
               />
             </Field>
 
-            {slotsQuery.loading ? <Spinner label="Checking availability…" /> : null}
+            {slotsQuery.loading ? <Spinner label={t('book.checking')} /> : null}
             <ErrorBanner error={slotsQuery.error} onRetry={slotsQuery.reload} />
 
             {!slotsQuery.loading && !slotsQuery.error ? (
               available.length === 0 ? (
                 <>
                 <EmptyState>
-                  No slots available on this date
-                  {slotsQuery.data && slotsQuery.data.total_slots > 0
-                    ? ' — every remaining slot is booked, held, already past, or the doctor is on leave.'
-                    : ' — the doctor is not working this day.'}{' '}
-                  Try another date.
+                  {slotsQuery.data && slotsQuery.data.total_slots > 0 ? t('book.noSlotsTaken') : t('book.noSlotsOff')}
                 </EmptyState>
                 {/* A working day with every slot taken: offer the waitlist (future dates only). */}
                 {slotsQuery.data && slotsQuery.data.total_slots > 0 && date > todayInputValue() ? (
@@ -325,8 +321,7 @@ export default function BookAppointment() {
               ) : (
                 <>
                   <p className="muted small">
-                    {available.length} of {slotsQuery.data?.total_slots} slots available. Times shown in
-                    the doctor's timezone: {timeZoneName(doctor?.timezone)}.
+                    {t('book.slotsAvailable', { available: available.length, total: slotsQuery.data?.total_slots ?? 0, zone: timeZoneName(doctor?.timezone) })}
                   </p>
                   <div className="slot-grid">
                     {available.map((slot) => (
@@ -342,7 +337,7 @@ export default function BookAppointment() {
                       </button>
                     ))}
                   </div>
-                  {holding ? <Spinner label="Reserving that slot…" /> : null}
+                  {holding ? <Spinner label={t('book.reserving')} /> : null}
                 </>
               )
             ) : null}
@@ -353,42 +348,42 @@ export default function BookAppointment() {
       {/* ---- Step 2: symptoms ---- */}
       {step === 'symptoms' && hold ? (
         <>
-          <Card title="Your reserved slot">
+          <Card title={t('book.reserved')}>
             <div className="summary-row">
-              <span>Time</span>
+              <span>{t('book.time')}</span>
               <strong>{formatDateTime(hold.start_time, doctor?.timezone)}</strong>
             </div>
             <div className="summary-row">
-              <span>Hold expires in</span>
+              <span>{t('book.holdExpiresIn')}</span>
               {holdExpired ? (
-                <Badge tone="danger">Expired</Badge>
+                <Badge tone="danger">{t('book.expired')}</Badge>
               ) : (
                 <Badge tone={secondsLeft < 120 ? 'warn' : 'info'}>{formatCountdown(secondsLeft)}</Badge>
               )}
             </div>
             {holdExpired ? (
               <InfoBanner>
-                This hold has expired and can no longer be confirmed. Choose another slot.
+                {t('book.holdExpired')}
               </InfoBanner>
             ) : null}
             <div className="row-actions">
               <button type="button" className="btn" onClick={handleReleaseHold} disabled={confirming}>
-                {holdExpired ? 'Choose another slot' : 'Release slot'}
+                {holdExpired ? t('book.chooseAnother') : t('book.release')}
               </button>
             </div>
           </Card>
 
-          <Card title="Describe your symptoms">
+          <Card title={t('book.describe')}>
             <p className="muted small">
-              Your doctor receives an AI-generated summary of this before your visit.
+              {t('book.describeHelp')}
             </p>
             <ErrorBanner error={confirmError} />
 
             <Field
-              label="Symptoms"
+              label={t('book.symptoms')}
               htmlFor="symptoms"
               error={symptomError}
-              hint="What's bothering you, when it started, and how it's changed."
+              hint={t('book.symptomsHint')}
             >
               <textarea
                 id="symptoms"
@@ -401,9 +396,9 @@ export default function BookAppointment() {
             </Field>
 
             <Field
-              label="Notes for your doctor (optional)"
+              label={t('book.notes')}
               htmlFor="booking-notes"
-              hint="Anything else they should know: access needs, an interpreter, medicines you take."
+              hint={t('book.notesHint')}
             >
               <textarea
                 id="booking-notes"
@@ -421,7 +416,7 @@ export default function BookAppointment() {
               onClick={handleConfirm}
               disabled={confirming || holdExpired}
             >
-              {confirming ? 'Confirming your appointment…' : 'Confirm appointment'}
+              {confirming ? t('book.confirming') : t('book.confirm')}
             </button>
           </Card>
         </>

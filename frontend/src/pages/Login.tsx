@@ -3,12 +3,14 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { useAuth, homePathForRole } from '../auth/AuthContext';
 import { ErrorBanner, Field, SuccessBanner } from '../components/ui';
+import { LanguagePicker, useT } from '../i18n/I18n';
 
 export default function Login() {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
 
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -20,9 +22,9 @@ export default function Login() {
 
   function validate(): boolean {
     const errs: typeof fieldErrors = {};
-    if (!email.trim()) errs.email = 'Email is required.';
-    else if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = 'Enter a valid email address.';
-    if (!password) errs.password = 'Password is required.';
+    if (!email.trim()) errs.email = t('validation.emailRequired');
+    else if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = t('validation.emailInvalid');
+    if (!password) errs.password = t('validation.passwordRequired');
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -61,19 +63,20 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Sign in</h1>
-        <p className="muted">Patients, doctors and administrators all sign in here.</p>
+        <LanguagePicker />
+        <h1>{t('login.title')}</h1>
+        <p className="muted">{t('login.subtitle')}</p>
 
         <ErrorBanner error={error} />
         {needsVerification ? (
           <button type="button" className="btn btn-block" onClick={handleResend} disabled={!email.trim()}>
-            Send me a new verification email
+            {t('login.resendVerification')}
           </button>
         ) : null}
         {resendNote ? <SuccessBanner>{resendNote}</SuccessBanner> : null}
 
         <form onSubmit={handleSubmit} noValidate>
-          <Field label="Email" htmlFor="email" error={fieldErrors.email}>
+          <Field label={t('login.email')} htmlFor="email" error={fieldErrors.email}>
             <input
               id="email"
               type="email"
@@ -84,7 +87,7 @@ export default function Login() {
             />
           </Field>
 
-          <Field label="Password" htmlFor="password" error={fieldErrors.password}>
+          <Field label={t('login.password')} htmlFor="password" error={fieldErrors.password}>
             <input
               id="password"
               type="password"
@@ -96,15 +99,15 @@ export default function Login() {
           </Field>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
 
         <p className="auth-alt">
-          <Link to="/forgot-password">Forgot your password?</Link>
+          <Link to="/forgot-password">{t('login.forgot')}</Link>
         </p>
         <p className="auth-alt">
-          New patient? <Link to="/register">Create an account</Link>
+          {t('login.newPatient')} <Link to="/register">{t('login.createAccount')}</Link>
         </p>
       </div>
     </div>

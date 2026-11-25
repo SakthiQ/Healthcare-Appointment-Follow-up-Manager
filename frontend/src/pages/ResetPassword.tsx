@@ -3,8 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { ErrorBanner, Field, SuccessBanner } from '../components/ui';
 import { validateNewPassword } from '../lib/password';
+import { LanguagePicker, useT } from '../i18n/I18n';
 
 export default function ResetPassword() {
+  const t = useT();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
@@ -21,7 +23,7 @@ export default function ResetPassword() {
     const errs: typeof fieldErrors = {};
     const passwordError = validateNewPassword(password);
     if (passwordError) errs.password = passwordError;
-    if (confirm !== password) errs.confirm = 'The two passwords do not match.';
+    if (confirm !== password) errs.confirm = t('reset.mismatch');
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
 
@@ -40,10 +42,11 @@ export default function ResetPassword() {
     return (
       <div className="auth-page">
         <div className="auth-card">
-          <h1>Reset your password</h1>
-          <ErrorBanner error={new Error('This link is incomplete. Open the link from your email again.')} />
+          <LanguagePicker />
+          <h1>{t('reset.title')}</h1>
+          <ErrorBanner error={new Error(t('reset.incomplete'))} />
           <p className="auth-alt">
-            <Link to="/forgot-password">Request a new link</Link>
+            <Link to="/forgot-password">{t('reset.requestNew')}</Link>
           </p>
         </div>
       </div>
@@ -53,23 +56,23 @@ export default function ResetPassword() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Choose a new password</h1>
+        <LanguagePicker />
+        <h1>{t('reset.choose')}</h1>
 
         {done ? (
           <>
             <SuccessBanner>
-              Your password has been changed and you were signed out everywhere. Sign in with the
-              new one.
+              {t('reset.done')}
             </SuccessBanner>
             <Link to="/login" className="btn btn-primary btn-block">
-              Go to sign in
+              {t('reset.goToSignIn')}
             </Link>
           </>
         ) : (
           <>
             <ErrorBanner error={error} />
             <form onSubmit={handleSubmit} noValidate>
-              <Field label="New password" htmlFor="password" error={fieldErrors.password}>
+              <Field label={t('reset.newPassword')} htmlFor="password" error={fieldErrors.password}>
                 <input
                   id="password"
                   type="password"
@@ -79,7 +82,7 @@ export default function ResetPassword() {
                   disabled={submitting}
                 />
               </Field>
-              <Field label="Confirm new password" htmlFor="confirm" error={fieldErrors.confirm}>
+              <Field label={t('reset.confirm')} htmlFor="confirm" error={fieldErrors.confirm}>
                 <input
                   id="confirm"
                   type="password"
@@ -90,11 +93,11 @@ export default function ResetPassword() {
                 />
               </Field>
               <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-                {submitting ? 'Saving…' : 'Change password'}
+                {submitting ? t('reset.saving') : t('reset.submit')}
               </button>
             </form>
             <p className="auth-alt">
-              Link expired? <Link to="/forgot-password">Request a new one</Link>
+              {t('reset.expired')} <Link to="/forgot-password">{t('reset.requestAnother')}</Link>
             </p>
           </>
         )}

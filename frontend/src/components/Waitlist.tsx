@@ -4,9 +4,11 @@ import { api } from '../api/client';
 import { useAsync } from '../lib/useAsync';
 import { formatDate } from '../lib/format';
 import { Card, ErrorBanner, SuccessBanner } from './ui';
+import { useT } from '../i18n/I18n';
 
 /** On a fully booked day: join the waitlist and get an email if a slot opens. */
 export function JoinWaitlistButton({ doctorId, date }: { doctorId: string; date: string }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [joined, setJoined] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -27,8 +29,7 @@ export function JoinWaitlistButton({ doctorId, date }: { doctorId: string; date:
   if (joined) {
     return (
       <SuccessBanner>
-        You are on the waitlist. If a slot opens that day, we will email you. Everyone waiting is told at
-        once, so book quickly.
+        {t('waitlist.joined')}
       </SuccessBanner>
     );
   }
@@ -36,7 +37,7 @@ export function JoinWaitlistButton({ doctorId, date }: { doctorId: string; date:
     <div>
       <ErrorBanner error={error} />
       <button type="button" className="btn" onClick={handleJoin} disabled={busy}>
-        {busy ? 'Joining…' : 'Join waitlist for this day'}
+        {busy ? t('waitlist.joining') : t('waitlist.join')}
       </button>
     </div>
   );
