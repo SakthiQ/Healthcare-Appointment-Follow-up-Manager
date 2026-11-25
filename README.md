@@ -82,7 +82,6 @@ list. New contributors should start with [`good first issue`](../../labels/good%
 - *For patients:*
   - [#71](../../issues/71): join a waitlist for a fully booked day
   - [#72](../../issues/72): use the app in Tamil or Hindi
-  - [#53](../../issues/53): a dark theme that follows the system setting
 - *For doctors:*
   - [#73](../../issues/73): an AI summary of the patient's previous visits
 - *For admins and the hospital:*
