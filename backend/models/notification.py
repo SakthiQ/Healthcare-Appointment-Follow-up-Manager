@@ -17,6 +17,7 @@ class NotificationType(str, enum.Enum):
     PASSWORD_RESET = "PASSWORD_RESET"
     EMAIL_VERIFICATION = "EMAIL_VERIFICATION"
     INVITATION = "INVITATION"
+    WAITLIST_SLOT_OPEN = "WAITLIST_SLOT_OPEN"
 
 
 class NotificationStatus(str, enum.Enum):

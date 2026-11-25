@@ -9,6 +9,7 @@ from app.api.ai import router as ai_router
 from app.api.patients import router as patients_router
 from app.api.patient_profile import router as patient_profile_router
 from app.api.departments import router as departments_router
+from app.api.waitlist import router as waitlist_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -19,5 +20,6 @@ api_router.include_router(slots_router)
 api_router.include_router(appointments_router)
 api_router.include_router(ai_router)
 api_router.include_router(departments_router)
+api_router.include_router(waitlist_router)
 api_router.include_router(patients_router)
 api_router.include_router(patient_profile_router)

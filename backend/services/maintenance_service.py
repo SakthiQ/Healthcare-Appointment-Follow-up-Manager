@@ -7,6 +7,7 @@ from repositories.auth_token_repository import auth_token_repository
 from repositories.invitation_repository import invitation_repository
 from repositories.login_throttle_repository import login_throttle_repository
 from repositories.rate_limit_repository import rate_limit_repository
+from services.waitlist_service import waitlist_service
 
 
 class MaintenanceService:
@@ -25,6 +26,7 @@ class MaintenanceService:
             "auth_tokens": auth_token_repository.purge_expired(db, now - timedelta(days=7)),
             "invitations": invitation_repository.purge_stale(db, now - timedelta(days=30)),
             "audit_logs": 0,
+            "waitlist_entries": waitlist_service.purge_past(db),
         }
         if settings.AUDIT_LOG_RETENTION_DAYS:
             cutoff = now - timedelta(days=settings.AUDIT_LOG_RETENTION_DAYS)

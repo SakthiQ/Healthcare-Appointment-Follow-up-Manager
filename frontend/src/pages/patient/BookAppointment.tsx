@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import type { AISummary, Appointment, Hold, PreVisitPayload, SlotItem } from '../../api/types';
 import { useAsync } from '../../lib/useAsync';
 import { useNow } from '../../lib/useNow';
+import { JoinWaitlistButton } from '../../components/Waitlist';
 import {
   bookableSlots,
   DAY_NAMES,
@@ -308,6 +309,7 @@ export default function BookAppointment() {
 
             {!slotsQuery.loading && !slotsQuery.error ? (
               available.length === 0 ? (
+                <>
                 <EmptyState>
                   No slots available on this date
                   {slotsQuery.data && slotsQuery.data.total_slots > 0
@@ -315,6 +317,11 @@ export default function BookAppointment() {
                     : ' — the doctor is not working this day.'}{' '}
                   Try another date.
                 </EmptyState>
+                {/* A working day with every slot taken: offer the waitlist (future dates only). */}
+                {slotsQuery.data && slotsQuery.data.total_slots > 0 && date > todayInputValue() ? (
+                  <JoinWaitlistButton key={date} doctorId={doctorId} date={date} />
+                ) : null}
+                </>
               ) : (
                 <>
                   <p className="muted small">

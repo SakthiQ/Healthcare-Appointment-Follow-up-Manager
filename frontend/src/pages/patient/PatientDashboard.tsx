@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useAsync } from '../../lib/useAsync';
 import { formatDateTime } from '../../lib/format';
 import { Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from '../../components/ui';
+import { MyWaitlist } from '../../components/Waitlist';
 
 const ACTIVE = new Set(['CONFIRMED', 'RESCHEDULED', 'HELD']);
 
@@ -77,6 +78,8 @@ export default function PatientDashboard() {
           )
         ) : null}
       </Card>
+
+      <MyWaitlist />
 
       {conflicted.length > 0 ? (
         <Card title="Appointments needing rebooking">

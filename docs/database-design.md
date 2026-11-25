@@ -251,6 +251,7 @@ stateDiagram-v2
 - `appointmentstatus` enum gained `NO_SHOW` (#68). It is not in the active-status list, so the unique index and overlap constraint ignore it, like `CANCELLED`.
 - `patient_profiles(id PK, user_id FK UNIQUE, date_of_birth, phone, allergies, updated_at)` (#67): optional health details, read only by the patient, the appointment's doctor and admins, audited.
 - `departments(id PK, name, description, is_active, created_at)` (#70): unique index `uq_departments_name_lower` on `lower(name)`, so names are unique regardless of case. `doctors.department_id` (FK, nullable, `ON DELETE SET NULL`, indexed) puts a doctor in at most one department; existing doctors keep working with none.
+- `waitlist_entries(id PK, patient_id FK, doctor_id FK, date, created_at, notified_at)` (#71): unique on `(patient_id, doctor_id, date)`, indexed on `(doctor_id, date)`. An entry is active until `notified_at` is set; joining again re-arms it. Past dates are purged by the maintenance worker. `notificationtype` gained `WAITLIST_SLOT_OPEN`.
 
 ### Doctor Leave Constraint
 - Doctor leave dates prevent slot generation for the full 24-hour day of the leave date.
