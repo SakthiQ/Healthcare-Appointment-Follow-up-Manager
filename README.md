@@ -84,16 +84,15 @@ load protection with automatic retry, and CI with PostgreSQL checks.
 - *For developers:* ruff linting, accessibility checks in the frontend tests, a clean
   database for every backend test, and Docker Compose to run everything with one command.
 
-**Next: making it production-grade.** The plan and the maintainer's own tasks (hosting,
-backups, accounts, legal) are tracked in [#122](../../issues/122). These issues are open for
-contributors:
+**Next: making it production-grade, on free plans.** The plan and the maintainer's own tasks
+(hosting, backups, accounts, legal) are tracked in [#122](../../issues/122). Everything stays on
+the free plans of Render, Vercel, Neon, Brevo and GitHub. These issues are open for contributors:
 
 - *Know when it breaks:*
   - [#107](../../issues/107): report errors to Sentry
   - [#108](../../issues/108): structured JSON logs with a request ID
 - *Hosting and deploys:*
-  - [#109](../../issues/109): run the background workers as their own service
-  - [#110](../../issues/110): run migrations before deploy, and safe schema changes
+  - [#110](../../issues/110): document safe database schema changes
   - [#111](../../issues/111): a staging environment
 - *Security:*
   - [#112](../../issues/112): two-factor sign-in for admins and doctors
@@ -129,8 +128,8 @@ conversation with a [feature request](../../issues/new/choose).
 - *Hospital scope:* wards and beds, and several branches in one system.
 - *Clinical modules:* lab and imaging results, pharmacy stock, billing and insurance claims.
 - *More AI help:* a guided symptom-intake chat, no-show prediction and smarter scheduling.
-- *Running at scale:* caching for busy read pages, autoscaling, and metrics and tracing for
-  operators.
+- *Running at scale (needs paid plans):* separate worker processes, more server copies with
+  autoscaling, caching for busy read pages, and metrics and tracing for operators.
 
 ## Quick start
 
