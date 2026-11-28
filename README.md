@@ -72,28 +72,55 @@ The project grows in stages. Each piece of work becomes an issue before anyone s
 
 **Done (v0.2):** appointments, the three portals, AI pre-visit and post-visit summaries,
 email notifications, calendar sync, staff invitations, the audit log, security hardening,
-load protection with automatic retry, and CI with PostgreSQL checks. Since then: search by
-doctor name, a proper "appointment rescheduled" email, admin retry of failed jobs, and a
-clean database for every backend test.
+load protection with automatic retry, and CI with PostgreSQL checks.
 
-**Next (open issues you can ask for):** the [issues page](../../issues) always has the current
-list. New contributors should start with [`good first issue`](../../labels/good%20first%20issue).
+**Done since v0.2:**
+- *For patients:* search by doctor name, visit history, health details for the doctor,
+  add-to-calendar files, a waitlist for fully booked days, a dark theme, and Tamil and Hindi.
+- *For doctors:* a weekly schedule page, marking no-shows, and an AI summary of the patient's
+  previous visits.
+- *For admins:* departments, retrying failed emails and calendar syncs, a CSV export of
+  appointments, clearer appointment emails, and an optional audit-log retention period.
+- *For developers:* ruff linting, accessibility checks in the frontend tests, a clean
+  database for every backend test, and Docker Compose to run everything with one command.
 
-- *For patients:*
-- *For doctors:*
-  - [#73](../../issues/73): an AI summary of the patient's previous visits
-- *For admins and the hospital:*
-  - [#65](../../issues/65): a page to retry failed emails and calendar syncs
-  - [#52](../../issues/52): clearer appointment emails with names, links and HTML
+**Next: making it production-grade.** The plan and the maintainer's own tasks (hosting,
+backups, accounts, legal) are tracked in [#122](../../issues/122). These issues are open for
+contributors:
+
+- *Know when it breaks:*
+  - [#107](../../issues/107): report errors to Sentry
+  - [#108](../../issues/108): structured JSON logs with a request ID
+- *Hosting and deploys:*
+  - [#109](../../issues/109): run the background workers as their own service
+  - [#110](../../issues/110): run migrations before deploy, and safe schema changes
+  - [#111](../../issues/111): a staging environment
+- *Security:*
+  - [#112](../../issues/112): two-factor sign-in for admins and doctors
+  - [#113](../../issues/113): cookie sign-in in production and security headers
+  - [#114](../../issues/114): CodeQL code scanning *(beginner)*
+  - [#115](../../issues/115): an OWASP ZAP security scan
+- *Testing and scale:*
+  - [#116](../../issues/116): end-to-end browser tests with Playwright
+  - [#117](../../issues/117): a load test on PostgreSQL
+- *Privacy and data rights:*
+  - [#118](../../issues/118): patients can download and delete their data
+  - [#119](../../issues/119): patient consent before their notes go to the AI
+- *Running it day to day:*
+  - [#120](../../issues/120): a runbook for when something breaks *(beginner)*
+  - [#121](../../issues/121): a changelog and a release workflow
+
+**Also open:** the [issues page](../../issues) always has the current list. New contributors
+should start with [`good first issue`](../../labels/good%20first%20issue).
+
 - *Frontend tests:*
   - [#35](../../issues/35): the booking page *(good first issue)*
   - [#36](../../issues/36): the doctor's appointment and consultation page *(good first issue)*
   - [#42](../../issues/42): the patient's doctor search and dashboard *(good first issue)*
 - *Code quality:*
-  - [#47](../../issues/47): ESLint for the frontend
+  - [#47](../../issues/47): ESLint for the frontend (waiting for TypeScript 7 support in typescript-eslint)
 - *Docs and setup:*
   - [#49](../../issues/49): check the local setup guide on macOS and Linux *(good first issue)*
-  - [#55](../../issues/55): Docker Compose to run the whole app with one command
 
 **Later (direction only, no issues yet):** these are ideas the project is heading towards, not
 promises. Please don't open pull requests for them. If one interests you, start a
@@ -102,8 +129,8 @@ conversation with a [feature request](../../issues/new/choose).
 - *Hospital scope:* wards and beds, and several branches in one system.
 - *Clinical modules:* lab and imaging results, pharmacy stock, billing and insurance claims.
 - *More AI help:* a guided symptom-intake chat, no-show prediction and smarter scheduling.
-- *Running at scale:* separate worker processes, caching for busy read pages, and metrics
-  and tracing for operators.
+- *Running at scale:* caching for busy read pages, autoscaling, and metrics and tracing for
+  operators.
 
 ## Quick start
 
